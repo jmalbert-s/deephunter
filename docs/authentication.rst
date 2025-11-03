@@ -43,8 +43,8 @@ Entra ID
 To use Entra ID:
 
 - Create roles in Entra ID, for example ``deephunter_usr`` (standard user, with read-only access) and ``deephunter_pr`` (privileged users, i.e., administrators) and assign users one of these roles.
-- install the `Entra ID plugin <plugins/entraid.html>`_ and configure it.
-- set ``AUTH_PROVIDER`` to ``entraid`` in the ``settings.py`` file.
+- Install the `Entra ID plugin <plugins/entraid.html>`_ and configure it.
+- Set ``AUTH_PROVIDER`` to ``entraid`` in the ``settings.py`` file.
 - Optionnaly disable the login form (set ``LOGIN_FORM`` to ``False`` in the settings)
 - When a user logs in, if the authentication is successful, information from the session token will be gathered to update the user in the local database.
 
@@ -76,3 +76,4 @@ Privileges are assigned to groups. Use the User Interface to assign privileges t
 .. image:: img/groups_permissions.png
   :width: 800
   :alt: DeepHunter groups and privileges
+
