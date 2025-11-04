@@ -147,7 +147,7 @@ Make the script executable and run it with the domain as a parameter (``deephunt
 
 .. code-block:: sh
 	
-	$ cd /data/deephunter/install/scripts/
+	$ cd /data/deephunter/install/scripts/common/
 	$ chmod +x ./generate_deephunter_self_cert.sh
 	$ ./generate_deephunter_self_cert.sh deephunter.localtest.me
 
@@ -429,3 +429,4 @@ When an update is available, you can upgrade DeepHunter as follows:
 
 	$ cd /data
 	$ ./deephunter/qm/scripts/upgrade.sh
+
