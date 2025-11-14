@@ -32,9 +32,7 @@ def regenerate_stats(analytic_id):
     analytic = get_object_or_404(Analytic, pk=analytic_id)
     add_info_notification(f'Regenerate stats task started for analytic "{analytic.name}"')
 
-    # we assume that analytic won't fail (flag will be set later if analytic fails). We also reset the counter and last time seen
-    analytic.analyticmeta.maxhosts_count = 0
-    analytic.analyticmeta.last_time_seen = None
+    # we assume that analytic won't fail (flag will be set later if analytic fails).
     analytic.analyticmeta.query_error = False
     analytic.analyticmeta.query_error_message = ''
     analytic.analyticmeta.query_error_date = None
