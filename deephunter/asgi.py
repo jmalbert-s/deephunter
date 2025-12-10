@@ -11,6 +11,14 @@ import os
 
 from django.core.asgi import get_asgi_application
 
+# Inject OS trust store into Python's ssl before any HTTPS connections
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    # Optionally log; don’t fail startup just for this
+    pass
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'deephunter.settings')
 
 application = get_asgi_application()
