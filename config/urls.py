@@ -9,4 +9,7 @@ urlpatterns = [
     path('running-tasks-table/', views.running_tasks_table, name='running_tasks_table'),
     path('task-status/<str:task_id>/', views.task_status, name='task_status'),
     path('stop-running-task/<str:task_id>/', views.stop_running_task, name='stop_running_task'),
+    path('api-keys/', views.api_keys, name='api_keys'),
+    path('generate-api-key/', views.generate_api_key, name='generate_api_key'),
+    path('delete-api-key/<int:pk>/', views.delete_api_key, name='delete_api_key'),
 ]

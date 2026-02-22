@@ -1,0 +1,59 @@
+<div class="api-keys-container">
+    <h2>API Keys Management</h2>
+    <p>Manage API keys used to authenticate programmatic access to the system. Treat these keys like passwords.</p>
+    
+    <div class="key-generation-form" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 4px;">
+        <h3>Generate New Key</h3>
+        <form hx-post="/config/generate-api-key/" hx-target="#api_keys" hx-swap="outerHTML">
+            {% csrf_token %}
+            <div style="margin-bottom: 10px;">
+                <label for="id_name">Key Name:</label>
+                <input type="text" id="id_name" name="name" required placeholder="e.g. Automation Script" style="width: 300px;">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="id_key_type">Permissions:</label>
+                <select id="id_key_type" name="key_type">
+                    <option value="READ">Read Only</option>
+                    <option value="WRITE">Read and Write</option>
+                </select>
+            </div>
+            <button type="submit" class="button">Create Key</button>
+        </form>
+    </div>
+
+    <h3>Active API Keys</h3>
+    {% if api_keys %}
+        <table class="list-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Key</th>
+                    <th>Created At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key in api_keys %}
+                <tr>
+                    <td>{{ key.name }}</td>
+                    <td>{{ key.get_key_type_display }}</td>
+                    <td><code style="background-color: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace;">{{ key.key }}</code></td>
+                    <td>{{ key.created_at|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <button class="buttonred" 
+                                hx-post="/config/delete-api-key/{{ key.id }}/" 
+                                hx-target="#api_keys" 
+                                hx-swap="outerHTML"
+                                hx-confirm="Are you sure you want to delete this API Key? Scripts using it will immediately fail.">
+                            Revoke
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No API keys generated yet.</p>
+    {% endif %}
+</div>

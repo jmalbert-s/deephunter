@@ -107,3 +107,44 @@ def stop_running_task(request, task_id):
     except Exception as e:
         add_error_notification(f'Error terminating Celery Task: {e}')
         return HttpResponse(f'Error terminating Celery Task: {e}')
+
+import secrets
+from django.views.decorators.http import require_POST
+from django.utils.crypto import get_random_string
+from .models import ApiKey
+
+@login_required
+@permission_required('config.view_admin', raise_exception=True)
+def api_keys(request):
+    keys = ApiKey.objects.all()
+    return render(request, 'api_keys.html', {'api_keys': keys})
+
+@login_required
+@permission_required('config.view_admin', raise_exception=True)
+@require_POST
+def generate_api_key(request):
+    name = request.POST.get('name', '').strip()
+    key_type = request.POST.get('key_type', 'READ')
+    if name:
+        new_key = secrets.token_urlsafe(32)
+        ApiKey.objects.create(name=name, key=new_key, key_type=key_type)
+        add_success_notification(f"Created new API key: {name}")
+    else:
+        add_error_notification("A name is required for the new API key.")
+    
+    # Return the updated list
+    keys = ApiKey.objects.all()
+    return render(request, 'api_keys.html', {'api_keys': keys})
+
+@login_required
+@permission_required('config.view_admin', raise_exception=True)
+@require_POST
+def delete_api_key(request, pk):
+    key = get_object_or_404(ApiKey, pk=pk)
+    name = key.name
+    key.delete()
+    add_success_notification(f"Deleted API key: {name}")
+    
+    # Return the updated list
+    keys = ApiKey.objects.all()
+    return render(request, 'api_keys.html', {'api_keys': keys})

@@ -21,4 +21,7 @@ urlpatterns = [
     path('notifications/', include('notifications.urls')),
     path('dashboard/', include('dashboard.urls')),
     path('config/', include('config.urls')),
+    path('api/qm/', include('qm.api_urls')),
+    path('api/repos/', include('repos.api_urls')),
+    path('api/connectors/', include('connectors.api_urls')),
 ]

@@ -27,3 +27,19 @@ class ModulePermission(models.Model):
             models.UniqueConstraint(fields=['module', 'action'], name='unique_module_action')
         ]
         ordering = ['module__name', 'action']
+
+class ApiKey(models.Model):
+    KEY_TYPES = [
+        ('READ', 'Read Only'),
+        ('WRITE', 'Read and Write'),
+    ]
+    name = models.CharField(max_length=100, unique=True)
+    key = models.CharField(max_length=64, unique=True, editable=False)
+    key_type = models.CharField(max_length=10, choices=KEY_TYPES, default='READ')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.key_type})"
+    
+    class Meta:
+        ordering = ['-created_at']
