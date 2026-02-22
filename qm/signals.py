@@ -1,190 +1,202 @@
 from django.db.models.signals import pre_save, post_save, post_delete
+from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 from django.conf import settings
-from .models import Query
-import requests
-import json
+from django.contrib.auth.models import User
 from datetime import datetime, timedelta
+from .models import Analytic, TasksStatus, AnalyticMeta
+from qm.utils import is_update_available, is_mitre_update_available
+from connectors.utils import is_connector_enabled
+from qm.tasks import regenerate_stats
+from notifications.utils import del_notification_by_uid, add_info_notification, add_error_notification, add_warning_notification
+import time
 
-# Params for requests API calls
-S1_URL = settings.S1_URL
-S1_TOKEN = settings.S1_TOKEN
+# Dynamically import all connectors
+import importlib
+import pkgutil
+import plugins
+all_connectors = {}
+for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
+    module = importlib.import_module(f"plugins.{module_name}")
+    all_connectors[module_name] = module
+
 PROXY = settings.PROXY
+DAYS_BEFORE_REVIEW = settings.DAYS_BEFORE_REVIEW
+AUTO_STATS_REGENERATION = settings.AUTO_STATS_REGENERATION
 
-# Params for STAR rules
-SYNC_STAR_RULES = settings.SYNC_STAR_RULES
-STAR_RULES_PREFIX = settings.STAR_RULES_PREFIX
-STAR_RULES_DEFAULTS = settings.STAR_RULES_DEFAULTS
+# This function is called after a user logs in
+@receiver(user_logged_in)
+def user_logged_in_receiver(sender, request, user, **kwargs):
+    # check if there is an update available and add a notification if applicable
+    if is_update_available():
+        del_notification_by_uid("update_available_deephunter")
+        add_info_notification("An update is available for DeepHunter. Use the upgrade script to do the update.", uid="update_available_deephunter")
+    else:
+        # remove all notifications related to deephunter update
+        del_notification_by_uid("update_available_deephunter")
 
-# This handler is triggered before a "Query" object is saved (pre_save when created or updated)
-@receiver(pre_save, sender=Query)
-def check_initial_value(sender, instance, **kwargs):
-    # Only apply if SYNC_STAR_RULES set to True in settings
-    if SYNC_STAR_RULES:
-        # Check if the instance is being updated (i.e., it's not a new object)
-        if instance.pk:
-            # Retrieve the current value of the field from the database
-            original_instance = Query.objects.get(pk=instance.pk)
-            
-            # Get the value of the STAR rule flag before threat hunting analytic is saved
-            # and compare with updated value
-            old_value = original_instance.star_rule
-            new_value = instance.star_rule
-            
-            # If STAR rule flag was initially set, and has been removed with the update
-            # we need to delete the STAR rule in S1
-            if old_value and not new_value:
-                body = {
-                    "filter": {
-                        "name__contains": f"{STAR_RULES_PREFIX}{instance.name}"
-                    }
-                }
-                r = requests.delete(f'{S1_URL}/web/api/v2.1/cloud-detection/rules',
-                    json=body,
-                    headers={'Authorization': f'ApiToken:{S1_TOKEN}'},
-                    proxies=PROXY
-                    )
+    # check if MITRE version is updated and add a notification if applicable
+    if is_mitre_update_available():
+        del_notification_by_uid("update_available_mitre")
+        add_info_notification("MITRE ATT&CK has been updated. Use the consistency check script to update your mapping.", uid="update_available_mitre")
+    else:
+        # remove all notifications related to MITRE update
+        del_notification_by_uid("update_available_mitre")
 
-    ### Reset counters and error flag when query updated
+    # checks the token expiration for all connectors and add a notification if applicable
+    for connector in all_connectors.values():
+        # only make the check if plugin is enabled and method get_token_expiration() exists
+        connector_name = connector.__name__.split('.')[1]
+        if is_connector_enabled(connector_name) and hasattr(connector, 'get_token_expiration'):
+            expires_in = connector.get_token_expiration()
+            # check if function returns a number
+            if isinstance(expires_in, (int, float)):
+                # delete previous message and create new one with updated #days before expiration
+                del_notification_by_uid(f"tokenexpires_{connector_name}")
+                if expires_in <= 0:
+                    add_error_notification(f"Token for {connector_name} has expired.", uid=f"tokenexpires_{connector_name}")
+                elif expires_in <= 7:
+                    add_warning_notification(f"Token for {connector_name} expires in {expires_in} days.", uid=f"tokenexpires_{connector_name}")
+            else:
+                # remove notifications related to token expiration for the connector
+                del_notification_by_uid(f"tokenexpires_{connector_name}")
+
+# This function is already defined in the views, but expects the request param that is not available in the signal handler.
+# So we cloned this function here so that it can be called from the signal handler.
+def regenerate_analytic_stats(analytic):
+    # sleep 1 second to make sure the task is not started immediately
+    # unless we do that, the task fails for newly created analytics
+    time.sleep(1)
+
+    # start the celery task (defined in qm/tasks.py)
+    taskid = regenerate_stats.delay(analytic.id)
+    
+    # Create task in TasksStatus object
+    celery_status = TasksStatus(
+        taskname=analytic.name,
+        taskid = taskid
+    )
+    celery_status.save()
+
+# This handler is triggered before an "Analytic" object is saved (pre_save when created or updated)
+@receiver(pre_save, sender=Analytic)
+def pre_save_handler(sender, instance, **kwargs):
+    
     # Check if the instance is being updated (i.e., it's not a new object)
     if instance.pk:
         # Retrieve the current value of the field from the database
-        original_instance = Query.objects.get(pk=instance.pk)
-               
-        # Only apply if "query" field is updated
-        if original_instance.query != instance.query:
+        original_instance = Analytic.objects.get(pk=instance.pk)
+
+        ### Reset counters, error flag and message, and last_time_seen when the "query" field of the analytic is updated
+        ### or when zscore thresholds are updated
+        if (original_instance.query != instance.query
+        or original_instance.anomaly_threshold_count != instance.anomaly_threshold_count
+        or original_instance.anomaly_threshold_endpoints != instance.anomaly_threshold_endpoints):
             # reset query flag
-            instance.maxhosts_count = 0
-            instance.query_error = False
-            instance.query_error_message = ''
+            instance.analyticmeta.maxhosts_count = 0
+            instance.analyticmeta.query_error = False
+            instance.analyticmeta.query_error_message = ''
+            instance.analyticmeta.query_error_date = None
+            instance.analyticmeta.last_time_seen = None
+            # we save a flag for the post_save handler to know if the query was changed (used for stats regeneration in post_save handler)
+            instance._query_changed = True
+            # Workflow automation: if status is PENDING and query is changed, analytic status automatically set to DRAFT
+            if original_instance.query != instance.query and instance.status == 'PENDING':
+                instance.status = 'DRAFT'
 
-# This handler is triggered after a "Query" object is saved (created or updated)
-@receiver(post_save, sender=Query)
-def post_save_handler(sender, instance, created, **kwargs):
-    # Only apply if SYNC_STAR_RULES set to True in settings
-    if SYNC_STAR_RULES:
-        # only apply if STAR_RULE flag set
-        if instance.star_rule:
+        # Only apply if "need_to_sync_rule" function returns True (defined in the connector settings)
+        if all_connectors.get(instance.connector.name).need_to_sync_rule():
 
-            # filter "tenant=true" is to apply rule to scope "global"
-            body_new = {
-                "data": {
-                    "queryLang": "2.0",
-                    "severity": STAR_RULES_DEFAULTS['severity'],
-                    "description": "Rule Sync from DeepHunter",
-                    "s1ql": instance.query,
-                    "name": f"{STAR_RULES_PREFIX}{instance.name}",
-                    "queryType": "events",
-                    "status": STAR_RULES_DEFAULTS['status']
-                },
-                "filter": {
-                    "tenant": "true"
-                }
-            }
-
-            # Expiration
-            if STAR_RULES_DEFAULTS['expiration']:
-                # if expiration is set in settings, it means mode is Temporary.
-                # We compute the target date
-                body_new['data']['expirationMode'] = 'Temporary'
-                body_new['data']['expiration'] = (datetime.utcnow()+timedelta(days=int(STAR_RULES_DEFAULTS['expiration']))).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
-            else:
-                # Empty string or 0 value set for expiration in settings means Permanent
-                body_new['data']['expirationMode'] = 'Permanent'
-            
-            # Cool Off Period
-            if STAR_RULES_DEFAULTS['coolOffPeriod']:
-                body_new['data']['coolOffSettings'] = {"renotifyMinutes": int(STAR_RULES_DEFAULTS['coolOffPeriod'])}
-            
-            # treatAsThreat
-            if STAR_RULES_DEFAULTS['treatAsThreat'] == 'Suspicious' or STAR_RULES_DEFAULTS['treatAsThreat'] == 'Malicious':
-                body_new['data']['treatAsThreat'] = STAR_RULES_DEFAULTS['treatAsThreat']
-            
-            # networkQuarantine
-            if STAR_RULES_DEFAULTS['networkQuarantine'].lower() == 'true':
-                body_new['data']['networkQuarantine'] = 'true'
-            
-            
-            # For newly created analytic
-            if created:
-                r = requests.post(f'{S1_URL}/web/api/v2.1/cloud-detection/rules',
-                    json=body_new,
-                    headers={'Authorization': f'ApiToken:{S1_TOKEN}'},
-                    proxies=PROXY
-                    )
-                    
-            # When analytic is updated
-            else:
-                # check if STAR rule already exists (STAR rule flag was previously set)
-                r = requests.get(f'{S1_URL}/web/api/v2.1/cloud-detection/rules?name__contains={STAR_RULES_PREFIX}{instance.name}',
-                    headers={'Authorization': f'ApiToken:{S1_TOKEN}'},
-                    proxies=PROXY
-                    )
-                if r.json()['data']:
-                    # if it exists, update it, but preserve severity and expiration              
-                    rule_id = r.json()['data'][0]['id']
-                    severity = r.json()['data'][0]['severity']
-                    expirationMode = r.json()['data'][0]['expirationMode']
-
-                    if expirationMode == 'Permanent':
-                        body_update = {
-                            "data": {
-                                "queryLang": "2.0",
-                                "severity": severity,
-                                "s1ql": instance.query,
-                                "name": f"{STAR_RULES_PREFIX}{instance.name}",
-                                "queryType": "events",
-                                "expirationMode": "Permanent",
-                                "status": STAR_RULES_DEFAULTS['status']
-                            },
-                            "filter": {
-                                "tenant": "true"
-                            }
-                        }
-                    else:
-                        body_update = {
-                            "data": {
-                                "queryLang": "2.0",
-                                "severity": severity,
-                                "s1ql": instance.query,
-                                "name": f"{STAR_RULES_PREFIX}{instance.name}",
-                                "queryType": "events",
-                                "expirationMode": "Temporary",
-                                "expiration": r.json()['data'][0]['expiration'],
-                                "status": STAR_RULES_DEFAULTS['status']
-                            },
-                            "filter": {
-                                "tenant": "true"
-                            }
-                        }
-                        
-                    r = requests.put(f'{S1_URL}/web/api/v2.1/cloud-detection/rules/{rule_id}',
-                        json=body_update,
-                        headers={'Authorization': f'ApiToken:{S1_TOKEN}'},
-                        proxies=PROXY
-                        )
+            # If create_rule flag was initially set
+            if original_instance.create_rule:
+                if instance.create_rule:
+                    if original_instance.query != instance.query:
+                        all_connectors.get(instance.connector.name).update_rule(instance)
                 else:
-                    # if it does not exist (STAR rule flag was not set), create it
-                    r = requests.post(f'{S1_URL}/web/api/v2.1/cloud-detection/rules',
-                        json=body_new,
-                        headers={'Authorization': f'ApiToken:{S1_TOKEN}'},
-                        proxies=PROXY
-                        )
+                    all_connectors.get(instance.connector.name).delete_rule(instance)
+            
+            else:
+                # if the updated analytic has the create_rule flag set while it was not set before,
+                # we need to create the remote rule associated with the analytic
+                if instance.create_rule:
+                    all_connectors.get(instance.connector.name).create_rule(instance)
 
-# This handler is triggered after a "Query" object is deleted
-@receiver(post_delete, sender=Query)
+        # Set the next review date if the analytic is published
+        if instance.status == 'PUB':
+            # if the analytic is locked, we remove the next review date
+            if instance.run_daily_lock:
+                instance.analyticmeta.next_review_date = None
+            else:
+                # we only set the next review date if the query was changed or if the status was not PUB before
+                if original_instance.query != instance.query or original_instance.status != 'PUB':
+                    instance.analyticmeta.next_review_date = datetime.now().date() + timedelta(days=DAYS_BEFORE_REVIEW)
+
+        # Bug #316 - Remove next review date from analytics that are no longer in PUB status
+        if original_instance.status == 'PUB' and instance.status != 'PUB':
+            instance.analyticmeta.next_review_date = None
+
+        # Save changes to AnalyticMeta
+        instance.analyticmeta.save()
+
+    # For "newly" created analytic
+    else:
+        
+        # Only apply if "need_to_sync_rule" function returns True (defined in the connector settings)
+        if all_connectors.get(instance.connector.name).need_to_sync_rule():
+            # if the create_rule flag is set, we need to create the remote rule associated with the analytic
+            if instance.create_rule:
+                all_connectors.get(instance.connector.name).create_rule(instance)
+
+    # When analytic is archived or pending, automatically remove the run_daily flag
+    if instance.status == 'ARCH' or instance.status == 'PENDING':
+        instance.run_daily = False
+    
+    # If run_daily_lock is set, run_daily should automatically be set
+    if instance.run_daily_lock and not instance.run_daily:
+        instance.run_daily = True
+
+# This handler is triggered after an "Analytic" object is saved
+@receiver(post_save, sender=Analytic)
+def post_save_handler(sender, instance, created, **kwargs):
+
+    if created:
+        # for new analytics, we create the AnalyticMeta object associated with the analytic
+        AnalyticMeta.objects.create(analytic=instance)
+
+        # Workflow. Set the next review date if the analytic is published
+        if instance.status == 'PUB':
+            # if the analytic is locked, we do not set the next review date
+            if instance.run_daily_lock:
+                instance.analyticmeta.next_review_date = None
+            else:
+                instance.analyticmeta.next_review_date = datetime.now().date() + timedelta(days=DAYS_BEFORE_REVIEW)
+
+    # When analytic is archived, set the next_review_date to None
+    if instance.status == 'ARCH':
+        instance.analyticmeta.next_review_date = None
+
+    # Save changes to AnalyticMeta
+    instance.analyticmeta.save()
+
+    if created:
+        # New analytics
+        if AUTO_STATS_REGENERATION:
+            regenerate_analytic_stats(instance)
+    else:
+        # for updated analytics, we check the flag set by the pre_save handler
+        if getattr(instance, '_query_changed', False):
+            if AUTO_STATS_REGENERATION:
+                regenerate_analytic_stats(instance)
+
+
+# This handler is triggered after an "Analytic" object is deleted
+@receiver(post_delete, sender=Analytic)
 def post_delete_handler(sender, instance, **kwargs):
-    # Only apply if SYNC_STAR_RULES set to True in settings
-    if SYNC_STAR_RULES:
-        # only apply if STAR_RULE flag set
-        if instance.star_rule:
-            body = {
-                "filter": {
-                    "name__contains": f"{STAR_RULES_PREFIX}{instance.name}"
-                }
-            }
-            r = requests.delete(f'{S1_URL}/web/api/v2.1/cloud-detection/rules',
-                json=body,
-                headers={'Authorization': f'ApiToken:{S1_TOKEN}'},
-                proxies=PROXY
-                )
+
+    # Only apply if "need_to_sync_rule" function returns True, for the connector of the analytic
+    if all_connectors.get(instance.connector.name).need_to_sync_rule():
+        
+        # only apply if create_rule flag set
+        if instance.create_rule:
+            # call the "delete_rule" function of the connector
+            all_connectors.get(instance.connector.name).delete_rule(instance)

@@ -1,67 +1,61 @@
-from authlib.integrations.django_client import OAuth
-from django.urls import reverse
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
-import requests
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import login, logout
 from django.contrib.auth.models import User, Group
-from django.dispatch import receiver
-from authlib.integrations.django_client import token_update
-import json
+from connectors.utils import is_connector_enabled
+from notifications.utils import add_error_notification
+
+# Dynamically import all connectors
+import importlib
+import pkgutil
+import plugins
+all_connectors = {}
+for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
+    module = importlib.import_module(f"plugins.{module_name}")
+    all_connectors[module_name] = module
 
 AUTH_PROVIDER = settings.AUTH_PROVIDER
-USER_GROUPS_MEMBERSHIP = settings.USER_GROUPS_MEMBERSHIP
-AUTH_TOKEN_MAPPING = settings.AUTH_TOKEN_MAPPING
-
-oauth = OAuth()
-oauth.register(name=AUTH_PROVIDER,)
-
-# Instead of defining an update_token method and passing it into OAuth registry,
-# it is also possible to use signals to listen for token updates
-@receiver(token_update)
-def on_token_update(sender, name, token, refresh_token=None, access_token=None, **kwargs):
-    if refresh_token:
-        item = OAuth2Token.find(name=name, refresh_token=refresh_token)
-    elif access_token:
-        item = OAuth2Token.find(name=name, access_token=access_token)
-    else:
-        return
-
-    # update old token
-    item.access_token = token['access_token']
-    item.refresh_token = token.get('refresh_token')
-    item.expires_at = token['expires_at']
-    item.save()
 
 def sso(request):
     # build a full authorize callback uri
     redirect_uri = request.build_absolute_uri('/authorize')
-    # Redirect user to Auth website (PingID for instance)
-    #  where login form may be shown + MFA
-    if AUTH_PROVIDER == 'pingid':
-        return oauth.pingid.authorize_redirect(request, redirect_uri)
+    # Redirect user to Auth website (PingID for instance) where login form may be shown + MFA
+    if is_connector_enabled(AUTH_PROVIDER):
+        return all_connectors.get(AUTH_PROVIDER).sso(request, redirect_uri)
     else:
-        return oauth.entra_id.authorize_redirect(request, redirect_uri)
+        add_error_notification(f"{AUTH_PROVIDER} connector is not enabled.")
+        return HttpResponseRedirect('/')
 
 def user_logout(request):
-    
     """
     Revoke token to be added?
     """
-    
     logout(request)
     return redirect('/')
 
+def check_groups():
+    """
+    Ensure that all groups defined in settings exist in the local DB, or create them.
+    If groups exist in the DB but are not defined in settings anymore, they are not deleted.
+    """
+
+    if not is_connector_enabled(AUTH_PROVIDER):
+        add_error_notification(f"{AUTH_PROVIDER} connector is not enabled.")
+        return HttpResponseRedirect('/')
+
+    USER_GROUPS_MEMBERSHIP = all_connectors.get(AUTH_PROVIDER).get_user_groups_membership()
+    for group_name in USER_GROUPS_MEMBERSHIP.keys():
+        group, created = Group.objects.get_or_create(name=group_name)
+
 def authorize(request):
     
+    check_groups()
     usergroups = []
+    token = all_connectors.get(AUTH_PROVIDER).get_token(request)
+    AUTH_TOKEN_MAPPING = all_connectors.get(AUTH_PROVIDER).get_token_mapping()
+    USER_GROUPS_MEMBERSHIP = all_connectors.get(AUTH_PROVIDER).get_user_groups_membership()
     
-    if AUTH_PROVIDER == 'pingid':
-        token = oauth.pingid.authorize_access_token(request)
-    else: # (assuming Entra ID is the auth provider)
-        token = oauth.entra_id.authorize_access_token(request)
-
     ### for debugging purposes
     ### It will stop and show the content of the token
     #return HttpResponse("<pre>{}</pre>".format(json.dumps(token, indent=4)))
@@ -74,11 +68,12 @@ def authorize(request):
             usergroups = token['userinfo'][AUTH_TOKEN_MAPPING['groups']]
     
     if usergroups:
-        refgroup_viewer = USER_GROUPS_MEMBERSHIP['viewer']
-        refgroup_manager = USER_GROUPS_MEMBERSHIP['manager']
+
+        # Search for matching groups
+        matching_groups = {k: v for k, v in USER_GROUPS_MEMBERSHIP.items() if v in usergroups}
 
         # if user is member of 1 of the reference groups, access granted
-        if refgroup_viewer in usergroups or refgroup_manager in usergroups:
+        if matching_groups:
             # we search if the user is already in the local DB
             user = User.objects.filter(username=token['userinfo'][AUTH_TOKEN_MAPPING['username']])
 
@@ -93,7 +88,7 @@ def authorize(request):
                 first_name = ''
             
             if AUTH_TOKEN_MAPPING['last_name'] in token['userinfo']:
-                last_name = token['userinfo'][AUTH_TOKEN_MAPPING['first_name']]
+                last_name = token['userinfo'][AUTH_TOKEN_MAPPING['last_name']]
             else:
                 last_name = ''
             
@@ -124,12 +119,8 @@ def authorize(request):
                 user.save()
                         
             # Add user to relevant group (viewer and/or manager)
-            if refgroup_manager in usergroups:
-                group = get_object_or_404(Group, name='manager')
-                group.user_set.add(user)
-
-            if refgroup_viewer in usergroups:
-                group = get_object_or_404(Group, name='viewer')
+            for matching_group in matching_groups:
+                group = get_object_or_404(Group, name=matching_group)
                 group.user_set.add(user)
             
             # login user

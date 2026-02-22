@@ -2,14 +2,26 @@
 {% load qm_extras %}
 
 {% block style %}
-<link rel="stylesheet" href="/static/bootstrap_table_expandable/bootstrap-table-expandable.css">
-<link rel="stylesheet" href="/static/css/endpoints.css">
-<script src="/static/jquery/jquery.min.js"></script>
-<script src="/static/bootstrap/js/bootstrap.min.js"></script>
-<script src="/static/bootstrap_table_expandable/bootstrap-table-expandable.js"></script>
+	<link rel="stylesheet" href="/static/bootstrap_table_expandable/bootstrap-table-expandable.css">
+	<link rel="stylesheet" href="/static/css/endpoints.css">
+	<link rel="stylesheet" href="/static/css/list_analytics.css">
 {% endblock %}
+{% block js %}
+	<script src="/static/bootstrap/js/bootstrap.min.js"></script>
+	<script src="/static/bootstrap_table_expandable/bootstrap-table-expandable.js"></script>
+{% endblock %}
+
 {% block body %}
-<h1>Top 20 endpoints identified in today's campaign</h1>
+<h1>Top endpoints identified in campaign</h1>
+<p>This report shows the endpoints that triggered analytics during the selected campaign. Only the first 300 endpoints are shown.</p>
+<form id="campaign_form" method="post">
+	{% csrf_token %}
+	Campaign: <select name="campaign" id="campaign_selector">
+		{% for campaign in campaigns %}
+			<option value="{{ campaign.id }}" {% if campaign.id|add:"0" == selected_campaign_id|add:"0" %}selected{% endif %}>{{ campaign.name }}</option>
+		{% endfor %}
+	</select>
+</form>
 <table class="table table-hover table-expandable table-striped">
 	<thead>
 		<tr>
@@ -23,28 +35,34 @@
 		<tr>
 			<td>{{ endpoint.hostname }} ({{ endpoint.site }})</td>
 			<td>{{ endpoint.total }}</td>
-			<td>{{ endpoint.queries|length }}</td>
+			<td>{{ endpoint.analytics|length }}</td>
 		</tr>
 		<tr>
 			<td colspan="4">
-				[<a href="/timeline?hostname={{ endpoint.hostname }}" target="_blank">Send to Timeline</a>]
-				[<a href="/netview?hostname={{ endpoint.hostname }}" target="_blank">Send to Netview</a>]
+				{% if perms.qm.view_timeline %}<a class="button" href="/qm/timeline?hostname={{ endpoint.hostname }}" target="_blank">Send to Timeline</a>{% endif %}
+				{% if perms.qm.view_netview %}<a class="button" href="/qm/netview?hostname={{ endpoint.hostname }}" target="_blank">Send to Netview</a>{% endif %}
 				<table>
 					<tr>
-						<th class="w600">Query</th>
+						<th class="w200">Connector</th>
+						<th class="w600">Analytic</th>
+						<th class="w200">Status</th>
+						<th class="w200">Category</th>
 						<th class="w200">Confidence</th>
 						<th class="w200">Relevance</th>
-						<th class="w200">Actions</th>
+						<th class="w300">Actions</th>
 					</tr>
-					{% for query in endpoint.queries %}
+					{% for analytic in endpoint.analytics %}
 					<tr>
-						<td>{{ query.name }}</td>
-						<td class="acenter"><div class="confidence_{{ query.confidence }}">{{ query.confidence|confidencelabel }}</div></td>
-						<td class="acenter"><div class="confidence_{{ query.relevance }}">{{ query.relevance|confidencelabel }}</div></td>
+						<td>{{ analytic.connector }}</td>
+						<td>{{ analytic.name }}</td>
+						<td class="acenter"><div class="{{ analytic.status|lower }}">{{ analytic.status }}</div></td>
+						<td>{% if analytic.category %}{{ analytic.category }}{% else %}-{% endif %}</td>
+						<td class="acenter"><div class="level_{{ analytic.confidence }} level">{{ analytic.confidence|confidencelabel }}</div></td>
+						<td class="acenter"><div class="level_{{ analytic.relevance }} level">{{ analytic.relevance|confidencelabel }}</div></td>
 						<td class="acenter">
-							[<a href="{{ query.xdrlink }}" target="_blank">events</a>]
-							[<a href="/{{ query.queryid }}/trend/" target="_blank">trend</a>]
-							[<a href="/admin/qm/query/{{ query.queryid }}/change/" target="_blank">admin</a>]
+							{% if perms.qm.run_query %}<a class="button" href="{{ analytic.xdrlink }}" target="_blank">events</a>{% endif %}
+							{% if perms.qm.view_snapshot %}<a class="button" href="/qm/{{ analytic.analyticid }}/trend/" target="_blank">trend</a>{% endif %}
+							{% if perms.qm.change_analytic %}<a class="button" href="/qm/analytic/{{ analytic.analyticid }}/change/">edit analytic</a>{% endif %}
 							</td>
 					</tr>
 					{% endfor %}
@@ -54,4 +72,39 @@
 		{% endfor %}
     </tbody>
 </table>
+
+<div class="pagination">
+	<span class="step-links">
+		<span class="previous">
+			{% if endpoints.has_previous %}
+			<a href="?page={{ endpoints.previous_page_number }}">Previous</a>
+			{% endif %}
+		</span>
+
+		<span class="current">
+			{% for i in endpoints.paginator.num_pages|to_range %}
+				{% if i == endpoints.number %}
+					<span class="pagelink">{{ i }}</span>
+				{% else %}
+					<span class="pagelink"><a href="?page={{ i }}">{{ i }}</a></span>
+				{% endif %}
+			{% endfor %}
+		</span>
+
+		<span class="next">
+			{% if endpoints.has_next %}
+				<span class="next"><a href="?page={{ endpoints.next_page_number }}">Next</a></span>
+			{% endif %}
+		</span>
+	</span>
+</div>
+
+<script nonce="lze3k9v2h6">
+	$(document).ready(function() {
+		$('#campaign_selector').on('change', function() {
+			document.forms['campaign_form'].submit();
+		});
+	});
+</script>
+<!--Query executed in {{ elapsed_time|floatformat:2 }} seconds.-->
 {% endblock %}

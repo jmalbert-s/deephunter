@@ -2,65 +2,95 @@ from django.conf import settings
 import json
 from django.shortcuts import get_object_or_404, render
 from django.contrib.auth.decorators import login_required, permission_required
-from django.http import HttpResponse, HttpResponseRedirect, FileResponse, JsonResponse
 from django.utils import timezone
-from django.db.models import Q, Sum
-from urllib.parse import quote
-from datetime import datetime, timedelta, date
-from qm.models import Country, Query, Snapshot, Campaign, TargetOs, Vulnerability, ThreatActor, ThreatName, MitreTactic, MitreTechnique, Endpoint, Tag, CeleryStatus
+from django.db.models import Q, Sum, Count, F
+from django.core.paginator import Paginator
+from datetime import datetime, timedelta
+from qm.models import Analytic, Snapshot, Campaign, MitreTactic, MitreTechnique, Endpoint, Connector, CampaignCompletion
+from notifications.utils import add_debug_notification
+from collections import defaultdict
+import time
 
-# Params for requests API calls
-XDR_URL = settings.XDR_URL
-XDR_PARAMS = settings.XDR_PARAMS
+# Dynamically import all connectors
+import importlib
+import pkgutil
+import plugins
+all_connectors = {}
+for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
+    module = importlib.import_module(f"plugins.{module_name}")
+    all_connectors[module_name] = module
+
+
 # Params for MITRE JSON file
 STATIC_PATH = settings.STATIC_ROOT
 # DB retention
 DB_DATA_RETENTION = settings.DB_DATA_RETENTION
 # max hosts threshold
 ON_MAXHOSTS_REACHED = settings.ON_MAXHOSTS_REACHED
+# threshold for rare occurrences
+RARE_OCCURRENCES_THRESHOLD = settings.RARE_OCCURRENCES_THRESHOLD
+
+ANALYTICS_PER_PAGE = settings.ANALYTICS_PER_PAGE
 
 @login_required
+@permission_required('qm.view_campaign', raise_exception=True)
 def campaigns_stats(request):
+    start_time = time.time()
     stats = []
     seconds_in_day = 24 * 60 * 60
     
+    connectors = Connector.objects.filter(domain="analytics", enabled=True).order_by('name')
+    
+    # initialize connector stats with empty lists
+    connector_stats = {}
+    for connector in connectors:
+        connector_stats[connector.name] = []
+
     for i in reversed(range(DB_DATA_RETENTION)):
-        d = date.today() - timedelta(days=i)
+        #d=datetime.combine(datetime.today(), datetime.min.time()) - timedelta(days=i)
+        d=datetime.today() - timedelta(days=i)
+        
         try:
-            campaign = Campaign.objects.get(
-                name__startswith="daily_cron_",
-                date_start__gte=timezone.now().replace(year=d.year, month=d.month, day=d.day, hour=0, minute=0, second=0),
-                date_start__lte=timezone.now().replace(year=d.year, month=d.month, day=d.day, hour=23, minute=59, second=59)
-                )        
+            campaign = get_object_or_404(Campaign, name=f"daily_cron_{d.strftime('%Y-%m-%d')}")
             difference = campaign.date_end - campaign.date_start
             dur = divmod(difference.days * seconds_in_day + difference.seconds, 60)
             duration = round(dur[0]+dur[1]*5/3/100, 1)
             
-            count_endpoints = Endpoint.objects.filter(snapshot__campaign=campaign).count()
-            
+            # Recursily count endpoints per connector
+            for connector in connectors:
+                connector_stats[connector.name].append({
+                    'date': d,
+                    'count': CampaignCompletion.objects.get(campaign=campaign, connector=connector).nb_queries_complete
+                    })
+
             stats.append({
                 'date':d,
                 'count_analytics':campaign.nb_queries,
                 'duration':duration,
-                'count_endpoints':count_endpoints
+                'count_endpoints_total':campaign.nb_endpoints,
                 })
         except:
             stats.append({
                 'date':d,
                 'count_analytics':0,
                 'duration':0,
-                'count_endpoints':0
+                'count_endpoints_total':0
                 })
     
+    elapsed_time = time.time() - start_time
     context = {
         'stats': stats,
-        'db_retention': DB_DATA_RETENTION
+        'connector_stats': connector_stats,
+        'db_retention': DB_DATA_RETENTION,
+        'elapsed_time': elapsed_time,
         }
     
     return render(request, 'stats.html', context)
 
 @login_required
+@permission_required('qm.view_analytic', raise_exception=True)
 def mitre(request):
+    start_time = time.time()
     max_score = 0
     json = """
 {
@@ -102,7 +132,7 @@ def mitre(request):
     
     t = []
     for technique in MitreTechnique.objects.all():
-        score = Query.objects.filter(mitre_techniques=technique).count()
+        score = Analytic.objects.filter(mitre_techniques=technique).count()
         t.append({
             "techniqueID": technique.mitre_id,
             "score": score
@@ -148,14 +178,15 @@ def mitre(request):
         tmp = []
         for technique in techniques:
             # how many analytics are using each technique or subtechniques related to the technique
-            numqueries = Query.objects.filter(
+            numanalytics = Analytic.objects.filter(
                 Q(mitre_techniques__mitre_id = technique.mitre_id)
                 | Q(mitre_techniques__mitre_technique__mitre_id = technique.mitre_id)
-            ).distinct().count()
+            ).exclude(status='ARCH').distinct().count()
             tmp.append({
+                'id': technique.id,
                 'mitre_id': technique.mitre_id,
                 'name': technique.name,
-                'numqueries': numqueries
+                'numanalytics': numanalytics
                 })
             
         ttp.append({
@@ -164,123 +195,332 @@ def mitre(request):
             'techniques': tmp
             })
 
+    elapsed_time = time.time() - start_time
     context = {
-        'ttp': ttp
+        'ttp': ttp,
+        'elapsed_time': elapsed_time,
         }
     
     return render(request, 'mitre.html', context)
 
 @login_required
+@permission_required('qm.view_endpoint', raise_exception=True)
 def endpoints(request):
-    # select TOP 20 endpoints for today's campaign
-    endpoints = Endpoint.objects.filter(
-        snapshot__date=datetime.today()-timedelta(days=1)
-        ).values('hostname', 'site').annotate(total=Sum('snapshot__query__weighted_relevance')).order_by('-total')[:20]
+    start_time = time.time()
+    campaigns = Campaign.objects.filter(name__startswith='daily_cron_').order_by('-name')
+
+    if request.method == 'POST':
+        selected_campaign_id = request.POST.get('campaign')
+    else:
+        selected_campaign = campaigns.first()
+        selected_campaign_id = selected_campaign.id
+
+    campaign = get_object_or_404(Campaign, id=selected_campaign_id)
+
+    # Get top endpoints
+    endpoints_qs = (
+        Endpoint.objects
+        .filter(snapshot__campaign=campaign)
+        .values('hostname', 'site')
+        .annotate(total=Sum('snapshot__analytic__weighted_relevance'))
+        .order_by('-total')[:300]
+    )
+
+    # Get all analytics for these endpoints in one query
+    hostnames = [e['hostname'] for e in endpoints_qs]
+    analytics_qs = (
+        Endpoint.objects
+        .filter(snapshot__campaign=campaign, hostname__in=hostnames)
+        .select_related(
+            'snapshot__analytic__connector',
+            'snapshot__analytic__category'
+        )
+        .order_by('-snapshot__analytic__weighted_relevance')
+    )
+
+    # Group analytics by hostname
+    analytics_by_hostname = defaultdict(list)
+    for analytic in analytics_qs:
+        a = analytic.snapshot.analytic
+        startdate = analytic.snapshot.date.strftime('%Y-%m-%d')
+        connector_name = a.connector.name
+        xdrlink = all_connectors.get(connector_name).get_redirect_analytic_link(a, filter_date=startdate, endpoint_name=analytic.hostname)
+        analytics_by_hostname[analytic.hostname].append({
+            "analyticid": a.id,
+            "name": a.name,
+            "connector": connector_name,
+            "status": a.status,
+            "category": a.category,
+            "confidence": a.confidence,
+            "relevance": a.relevance,
+            "xdrlink": xdrlink
+        })
+
+    # Build data for template
     data = []
-    for endpoint in endpoints:
+    for endpoint in endpoints_qs:
         hostname = endpoint['hostname']
         site = endpoint['site']
-        queries = Endpoint.objects.filter(
-            snapshot__date=datetime.today()-timedelta(days=1),
-            hostname=hostname
-            ).order_by('-snapshot__query__weighted_relevance')
-        
-        qdata = []
-        for query in queries:
-            
-            if '| parse' in query.snapshot.query.query or '| let' in query.snapshot.query.query or '| filter' in query.snapshot.query.query:
-                # if there are embedded functions like "| parse", "| filter", etc... end of parenthesis should be
-                # placed before the "| parse" statement, instead of at the very end of the query.
-                customized_query = "endpoint.name='{}' and (\n{}".format(hostname, query.snapshot.query.query)
-                # replace only the first occurence, not all where pipe is detected
-                customized_query = customized_query.replace("| ", ")\n| ", 1)
-            else:
-                customized_query = "endpoint.name='{}' and (\n{}\n)".format(hostname, query.snapshot.query.query)
-            
-            if query.snapshot.query.columns:
-                q = quote('{}\n{}'.format(customized_query, query.snapshot.query.columns))
-            else:
-                q = quote(customized_query)
-            
-            startdate=(datetime.today()-timedelta(days=1)).strftime('%Y-%m-%d')
-            xdrlink = '{}/query?filter={}&{}&startTime={}&endTime=%2B1day'.format(XDR_URL, q.replace('%0D', ''), XDR_PARAMS, startdate)
-            
-            qdata.append({
-                "queryid":query.snapshot.query.id,
-                "name":query.snapshot.query.name,
-                "confidence":query.snapshot.query.confidence,
-                "relevance":query.snapshot.query.relevance,
-                "xdrlink":xdrlink
-                })
-        
         data.append({
-            "hostname":hostname,
-            "site":site,
-            "total":endpoint['total'],
-            "queries":qdata
-            })
+            "hostname": hostname,
+            "site": site,
+            "total": endpoint['total'],
+            "analytics": analytics_by_hostname.get(hostname, [])
+        })
+
+    paginator = Paginator(data, ANALYTICS_PER_PAGE)
+    page_number = int(request.GET.get('page', 1))
+    page_obj = paginator.get_page(page_number)
+
+    elapsed_time = time.time() - start_time
     context = {
-        'endpoints': data
-        }
-    
+        'campaigns': campaigns,
+        'selected_campaign_id': selected_campaign_id,
+        'endpoints': page_obj,
+        'elapsed_time': elapsed_time,
+    }
     return render(request, 'endpoints.html', context)
 
-
 @login_required
-def missing_mitre(request):
-    # Number of analytics with unmapped MITRE techniques
-    q_unmapped = Query.objects.filter(mitre_techniques=None)
-    q_unmapped_count = q_unmapped.count()
-
-    # Number of analytics with MITRE techniques mapped
-    q_mapped_count = Query.objects.filter(~Q(mitre_techniques=None)).count()
-
-    context = {
-        'q_unmapped': q_unmapped,
-        'q_unmapped_count': q_unmapped_count,
-        'q_mapped_count': q_mapped_count
-        }
-    
-    return render(request, 'missing_mitre.html', context)
-
-@login_required
+@permission_required('qm.view_campaign', raise_exception=True)
 def analytics_perfs(request):
+    start_time = time.time()
     yesterday = datetime.now() - timedelta(days=1)
     snapshots = Snapshot.objects.filter(date=yesterday).order_by('-runtime')
-    queries = []
+    analytics = []
     
     for snapshot in snapshots:
-        query_snapshots = Snapshot.objects.filter(query=snapshot.query, date__gt=datetime.today()-timedelta(days=20)).order_by('date')
-        queries.append({
-                'id': snapshot.query.id,
-                'name': snapshot.query.name,
+        analytic_snapshots = Snapshot.objects.filter(analytic=snapshot.analytic, date__gt=datetime.today()-timedelta(days=20)).order_by('date')
+        analytics.append({
+                'id': snapshot.analytic.id,
+                'name': snapshot.analytic.name,
+                'connector': snapshot.analytic.connector.name,
                 'runtime': snapshot.runtime,
-                'sparkline': [query_snapshot.runtime for query_snapshot in query_snapshots]
+                'status': snapshot.analytic.status,
+                'sparkline': [analytic_snapshot.runtime for analytic_snapshot in analytic_snapshots]
             })
-    
+
+    paginator = Paginator(analytics, ANALYTICS_PER_PAGE)
+    page_number = int(request.GET.get('page', 1))
+    page_obj = paginator.get_page(page_number)
+
+    elapsed_time = time.time() - start_time
     context = {
-        'queries': queries
+        'analytics': page_obj,
+        'elapsed_time': elapsed_time,
         }
     
     return render(request, 'perfs.html', context)
 
 @login_required
-def disabled_analytics(request):
-    queries = Query.objects.filter(
-        run_daily = False,
-        maxhosts_count__gte = ON_MAXHOSTS_REACHED['THRESHOLD']
-    )
-    context = {
-        'queries': queries
-        }
-    
-    return render(request, 'disabled_analytics.html', context)
+@permission_required('qm.view_analytic', raise_exception=True)
+def query_error(request):
+    context = {}
+    return render(request, 'query_error.html', context)
 
 @login_required
-def query_error(request):
-    queries = Query.objects.filter(query_error = True)
+@permission_required('qm.view_analytic', raise_exception=True)
+def query_error_table(request):
+    start_time = time.time()
+    analytics_with_errors = Analytic.objects.filter(analyticmeta__query_error = True).exclude(status='ARCH').order_by('-analyticmeta__query_error_date')
+    include_info = request.GET.get('include_info', 'off') == 'on'  # Get checkbox value
+    
+    analytics = []
+    for analytic in analytics_with_errors:
+        error_is_info = all_connectors.get(analytic.connector.name).error_is_info(analytic.analyticmeta.query_error_message)
+        if (not error_is_info) or (error_is_info and include_info):
+            analytics.append({
+                'id': analytic.id,
+                'name': analytic.name,
+                'description': analytic.description,
+                'query': analytic.query,
+                'status': analytic.status,
+                'maxhosts_count': analytic.analyticmeta.maxhosts_count,
+                'connector_name': analytic.connector.name,
+                'run_daily': analytic.run_daily,
+                'error': analytic.analyticmeta.query_error,
+                'error_is_info': error_is_info,
+                'query_error_message': analytic.analyticmeta.query_error_message,
+                'query_error_date': analytic.analyticmeta.query_error_date,
+            })
+
+    paginator = Paginator(analytics, ANALYTICS_PER_PAGE)
+    page_number = int(request.GET.get('page', 1))
+    page_obj = paginator.get_page(page_number)
+
+    elapsed_time = time.time() - start_time
     context = {
-        'queries': queries
+        'analytics': page_obj,
+        'elapsed_time': elapsed_time,
         }
     
-    return render(request, 'query_error.html', context)
+    return render(request, 'partials/query_error_table.html', context)
+
+
+@login_required
+@permission_required('qm.view_analytic', raise_exception=True)
+def rare_occurrences(request):
+    start_time = time.time()
+    # Get analytics with rare occurrences
+    analytics_qs = (
+        Endpoint.objects
+        .values(
+            'snapshot__analytic__id',
+            'snapshot__analytic__name',
+            'snapshot__analytic__connector__name',
+            'snapshot__analytic__status',
+            'snapshot__analytic__category__short_name',
+            'snapshot__analytic__confidence',
+            'snapshot__analytic__relevance',
+            'snapshot__analytic__description',
+            'snapshot__analytic__query',
+            'hostname'
+        )
+        .exclude(snapshot__analytic__status='ARCH')
+    )
+
+    # Group hostnames by analytic
+    analytic_data = defaultdict(lambda: {
+        'id': None,
+        'name': None,
+        'connector': None,
+        'status': None,
+        'category': None,
+        'confidence': None,
+        'relevance': None,
+        'description': None,
+        'query': None,
+        'hostnames': set()
+    })
+
+    for row in analytics_qs:
+        aid = row['snapshot__analytic__id']
+        analytic = analytic_data[aid]
+        analytic['id'] = aid
+        analytic['name'] = row['snapshot__analytic__name']
+        analytic['connector'] = row['snapshot__analytic__connector__name']
+        analytic['status'] = row['snapshot__analytic__status']
+        analytic['category'] = row['snapshot__analytic__category__short_name']
+        analytic['confidence'] = row['snapshot__analytic__confidence']
+        analytic['relevance'] = row['snapshot__analytic__relevance']
+        analytic['description'] = row['snapshot__analytic__description']
+        analytic['query'] = row['snapshot__analytic__query']
+        analytic['hostnames'].add(row['hostname'])
+
+    # Filter analytics with rare occurrences
+    data = []
+    for analytic in analytic_data.values():
+        distinct_hostnames = len(analytic['hostnames'])
+        if distinct_hostnames < RARE_OCCURRENCES_THRESHOLD:
+            data.append({
+                'id': analytic['id'],
+                'name': analytic['name'],
+                'connector': analytic['connector'],
+                'status': analytic['status'],
+                'category': analytic['category'],
+                'confidence': analytic['confidence'],
+                'relevance': analytic['relevance'],
+                'description': analytic['description'],
+                'query': analytic['query'],
+                'distinct_hostnames': distinct_hostnames,
+                'endpoints': list(analytic['hostnames'])
+            })
+
+    # Sort by distinct_hostnames
+    data.sort(key=lambda x: x['distinct_hostnames'])
+
+    paginator = Paginator(data, ANALYTICS_PER_PAGE)
+    page_number = int(request.GET.get('page', 1))
+    page_obj = paginator.get_page(page_number)
+
+    elapsed_time = time.time() - start_time
+    context = {
+        'analytics': page_obj,
+        'elapsed_time': elapsed_time,
+    }
+    return render(request, 'rare_occurrences.html', context)
+
+
+@login_required
+@permission_required('qm.view_endpoint', raise_exception=True)
+def endpoints_most_analytics(request):
+    start_time = time.time()
+
+    # Limited to first 300 endpoints with the most analytics
+    top_endpoints = (
+        Endpoint.objects
+        .values('hostname', 'site')
+        .annotate(analytics_count=Count('snapshot__analytic', distinct=True))
+        .order_by('-analytics_count')[:300]
+    )
+
+    paginator = Paginator(top_endpoints, ANALYTICS_PER_PAGE)
+    page_number = int(request.GET.get('page', 1))
+    page_obj = paginator.get_page(page_number)
+
+    elapsed_time = time.time() - start_time
+
+    context = {
+        'top_endpoints': page_obj,
+        'elapsed_time': elapsed_time,
+    }
+    return render(request, 'endpoints_most_analytics.html', context)
+
+@login_required
+@permission_required('qm.view_review', raise_exception=True)
+def upcoming_analytic_reviews(request):
+    start_time = time.time()
+    analytics = (
+        Analytic.objects
+        .filter(analyticmeta__next_review_date__isnull=False)
+        .exclude(status='ARCH')
+        .values('analyticmeta__next_review_date')
+        .annotate(count=Count('id'))
+        .order_by('analyticmeta__next_review_date')
+    )
+    elapsed_time = time.time() - start_time
+    context = {
+        'analytics': analytics,
+        'elapsed_time': elapsed_time,
+    }
+    return render(request, 'upcoming_analytic_reviews.html', context)
+
+@login_required
+@permission_required('qm.view_campaign', raise_exception=True)
+def highest_weighted_score(request):
+    start_time = time.time()
+    results = []
+    highest_score = 0
+    campaigns = Campaign.objects.filter(name__startswith='daily_cron_').order_by('date_start')
+    for campaign in campaigns:
+        qs = Endpoint.objects.filter(
+            snapshot__campaign=campaign
+        ).values('hostname').annotate(
+            total_weighted_score=Sum(F('snapshot__analytic__weighted_relevance'))
+        ).order_by('-total_weighted_score')
+        highestweightedscore = qs.first()
+        if highestweightedscore:
+            highest_weighted_relevance = highestweightedscore['total_weighted_score']
+            hostname = highestweightedscore['hostname']
+        else:
+            highest_weighted_relevance = 0
+            hostname = ''
+        results.append({
+            "date": campaign.date_start,
+            "hostname": hostname,
+            "highest_weighted_relevance": highest_weighted_relevance,
+            "color": "#4661EE"  # Default color (light blue)
+            })
+
+    # Find the item with the highest score and give them the red color
+    max_score = max(int(item["highest_weighted_relevance"]) for item in results)
+    for item in results:
+        if int(item["highest_weighted_relevance"]) == max_score:
+            item["color"] = "#FF6961"  # Red color for the highest score
+
+    elapsed_time = time.time() - start_time
+    context = {
+        'results': results,
+        'elapsed_time': elapsed_time,
+    }
+    return render(request, 'highest_weighted_score.html', context)

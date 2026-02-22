@@ -1,0 +1,119 @@
+@font-face {
+  font-family: 'Roboto';
+  src: url('../webfonts/roboto-v49-latin-regular.woff2') format('woff2');
+  font-style: normal;
+}
+
+.container_widgets {
+  display: flex;
+  width: 100%;
+}
+
+div.widget_number {
+    display: grid;
+    place-items: center; /* Centers both horizontally and vertically */
+    width: 200px;
+    height: 200px;
+    margin-top: 20px;
+    margin-left: 20px;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fff;
+}
+
+div.widget_number img {
+    width: 100px;
+    height: auto; /* Maintains aspect ratio */
+}
+
+div.widget_number h3 {
+    font-size: 0.9em; /*0.7em*/
+    margin-bottom: 10px;
+    text-align: center;
+    color: #a1a1a1;
+    font-family: "Roboto", sans-serif;
+    font-weight: 700;
+}
+div.widget_chart h3{
+    padding-top: 10px;
+    font-size: 0.9em; /*0.7em*/
+    margin-bottom: 10px;
+    text-align: center;
+    color: #a1a1a1;
+    font-family: "Roboto", sans-serif;
+    font-weight: 700;
+}
+
+div.num, div.num_green, div.num_red {
+    font-family: "Roboto", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 900;
+    font-size: 2.5em;
+    text-align: center;
+    /*color: #303030;*/
+}
+
+div.num a {
+    text-decoration: none;
+    color: #303030;
+}
+
+div.num_green a {
+    text-decoration: none;
+    color: rgba(10, 156, 10, 0.801);
+}
+
+div.num_red a {
+    text-decoration: none;
+    color: rgba(209, 49, 0, 0.801);
+}
+
+div.compare_plus {
+    font-size: 0.8em;
+    color: rgba(10, 156, 10, 0.801);
+    text-align: center;
+    font-weight: bold;
+}
+
+div.compare_minus {
+    font-size: 0.8em;
+    color: rgba(209, 49, 0, 0.801);
+    text-align: center;
+    font-weight: bold;
+}
+
+
+
+
+
+
+
+div.widget_chart {
+    display: grid;
+    place-items: center; /* Centers both horizontally and vertically */
+
+    width: 460px;
+    height: 300px;
+
+    margin-top: 20px;
+    margin-left: 20px;
+    padding: 0px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fff;
+}
+
+div.chartContainer {
+    width: 432px; /* div.widget_chart - 40 */
+    height: 260px; /* div.widget_chart - 40 */
+    padding: 0px;
+}
+
+/* container within widgets to align total and trend */
+.container_number {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+}

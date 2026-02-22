@@ -1,0 +1,150 @@
+form.visible {
+    display: block;
+}
+form.hidden {
+    display: none;
+}
+
+form.connector-form textarea {
+    width: 1200px;
+    height: 30px;
+}
+
+form.connector-form input.url-field {
+    width: 1200px;
+}
+
+#connector-conf-submit {
+    margin-top: 10px;
+}
+
+div.container-switch-toggle {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+span.switch-status-label {
+    font-size: 17px;
+    margin-right: 10px;
+}
+
+/* The switch - the box around the slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px; /* width: 60px; */
+  height: 28px; /* height: 34px; */
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px; /*26px;*/
+  width: 20px; /* 26px; */
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(20px); /*-webkit-transform: translateX(26px);*/
+  -ms-transform: translateX(20px); /*-ms-transform: translateX(26px);*/
+  transform: translateX(20px); /*transform: translateX(26px); */
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 28px; /*34px;*/
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+div.connector-title {
+    margin-bottom: 10px;
+    color: #888;
+    text-transform: uppercase;
+    font-size: 18px;
+    font-weight: bold;
+}
+div.connector-description {
+    margin-bottom: 30px;
+    color: #888;
+}
+
+span.toggle-eye {
+  position: absolute;
+  transform: translateX(-30px);
+  cursor: pointer;
+}
+
+div.connector-div,
+div.connectors-list {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+div.connector-div {
+    gap: 10px;
+}
+
+div.connector {
+    width: 500px;
+    border: solid 1px #ddd;
+    padding: 10px;
+    margin: 5px; 
+    border-radius: 5px;
+}
+
+div.connector-description {
+    margin-top: 20px;
+    margin-bottom: 0px;
+    font-size: 13px;
+    color: #666;
+    height: 80px;
+}
+
+img.connector-icon {
+    width: 40px;
+}
+
+div.connector-name {
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+div.aright {
+    text-align: right;
+}

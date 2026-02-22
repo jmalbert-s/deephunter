@@ -1,1 +1,4 @@
+sphinx-togglebutton
+sphinx-copybutton
+sphinx-design
 sphinx-rtd-theme

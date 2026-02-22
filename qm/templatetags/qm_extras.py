@@ -1,14 +1,23 @@
 from django import template
 from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import stringfilter
-from qm.models import Country, TargetOs, ThreatActor, ThreatName, Vulnerability, MitreTactic, MitreTechnique, Tag
+from django.contrib.auth.models import User
+from qm.models import (Country, TargetOs, ThreatActor, ThreatName, Vulnerability,
+    MitreTactic, MitreTechnique, Tag, Category, Review, Analytic, Repo)
+from connectors.models import Connector
+from connectors.utils import is_connector_enabled
 from django.conf import settings
+import re
 
 register = template.Library()
 
 @register.simple_tag
 def settings_value(name):
     return getattr(settings, name, "")
+
+@register.filter
+def connector_is_enabled(connector_name):
+    return is_connector_enabled(connector_name)
 
 @register.filter
 def repl(v):
@@ -34,7 +43,26 @@ def cvecolor(base_score):
     return myclass
 
 @register.filter
+def repoidtoname(id):
+    v = get_object_or_404(Repo, pk=id)
+    return v.name
+
+@register.filter
+def connectoridtoname(id):
+    v = get_object_or_404(Connector, pk=id)
+    return v.name
+
+@register.filter
+def categoryidtoname(id):
+    if id == '0':
+        return '(empty)'
+    v = get_object_or_404(Category, pk=id)
+    return v.name
+
+@register.filter
 def osidtoname(id):
+    if id == '0':
+        return '(empty)'
     v = get_object_or_404(TargetOs, pk=id)
     return v.name
 
@@ -85,13 +113,31 @@ def tacticidtotitle(id):
 
 @register.filter
 def techniqueidtoname(id):
+    if id == '0':
+        return '(empty)'
     v = get_object_or_404(MitreTechnique, pk=id)
     return v.mitre_id
 
 @register.filter
 def techniqueidtotitle(id):
+    if id == '0':
+        return '(empty)'
     v = get_object_or_404(MitreTechnique, pk=id)
     return v.name
+
+@register.filter
+def useridtousername(id):
+    if id == '0':
+        return '(empty)'
+    v = get_object_or_404(User, pk=id)
+    return v.username
+
+@register.filter
+def useridtofirstnamelastname(id):
+    if id == '0':
+        return '(empty)'
+    v = get_object_or_404(User, pk=id)
+    return f"{v.first_name} {v.last_name}"
 
 @register.filter
 def confidencecolor(confidence):
@@ -123,14 +169,6 @@ def confidencelabel(confidence):
     
     return label
 
-@register.filter
-def statuslabel(status):
-    if status == 'DRAFT':
-        label = 'Draft'
-    elif status == 'DIST':
-        label = 'Dist'
-    
-    return label
 
 @register.filter
 def isactiveurl(currenturl, compurl):
@@ -166,3 +204,104 @@ def isselectedoption(opt, v):
         return 'selected'
     else:
         return ''
+
+
+@register.filter
+def to_range(value):
+    return range(1,value+1)
+
+@register.filter
+def get_review_label(decision):
+    for k,v in Review.DECISION_CHOICES:
+        if k==decision:
+            return v
+
+@register.filter
+def gotodoc(url):
+    doc = 'https://deephunter.readthedocs.io/en/latest'
+    
+    # modules
+    if url == '/':
+        return f"{doc}/modules/dashboards.html"
+    elif url == '/qm/listanalytics/':
+        return f"{doc}/modules/analytics.html"
+    elif url == '/qm/analytic/add/':
+        return f"{doc}/modules/analytics.html#create-threat-hunting-analytics"
+    elif re.match(r"^/qm/analytic/\d+/change/$", url):
+        return f"{doc}/modules/analytics.html#create-threat-hunting-analytics"
+    elif re.match(r"^/qm/analytic/\d+/clone/$", url):
+        return f"{doc}/modules/analytics.html#create-threat-hunting-analytics"
+    elif url == '/qm/saved_searches/':
+        return f"{doc}/modules/analytics.html#saved-searches"
+    elif url == '/qm/timeline/':
+        return f"{doc}/modules/timeline.html"
+    elif url == '/qm/netview/':
+        return f"{doc}/modules/netview.html"
+    elif url == '/qm/managecampaigns/':
+        return f"{doc}/modules/manage_campaigns.html"
+    
+    # Reports based on analytics view
+    elif url == '/qm/listanalytics/?statuses=REVIEW':
+        return f"{doc}/reports/analytics_to_review.html"
+    elif url == '/qm/listanalytics/?run_daily=0&maxhosts=1':
+        return f"{doc}/reports/disabled_analytics.html"
+    elif url == '/qm/listanalytics/?alreadyseen=0':
+        return f"{doc}/reports/zero_occurrences.html"
+
+    # reports
+    elif url == '/reports/campaigns_stats/':
+        return f"{doc}/reports/stats.html"
+    elif url == '/reports/analytics_perfs/':
+        return f"{doc}/reports/perfs.html"
+    elif url == '/reports/endpoints/':
+        return f"{doc}/reports/endpoints.html"
+    elif url == '/reports/endpoints_most_analytics/':
+        return f"{doc}/reports/endpoints_most_analytics.html"
+    elif url == '/reports/mitre/':
+        return f"{doc}/reports/mitre_coverage.html"
+    elif url == '/reports/missing_mitre/':
+        return f"{doc}/reports/missing_mitre.html"
+    elif url == '/reports/query_error/':
+        return f"{doc}/reports/query_error.html"
+    elif url == '/reports/rare_occurrences/':
+        return f"{doc}/reports/rare_occurrences.html"
+
+    # tools
+    elif url == '/extensions/vthashchecker/':
+        return f"{doc}/tools/vt_hash_checker.html"
+    elif url == '/extensions/vtipchecker/':
+        return f"{doc}/tools/vt_ip_checker.html"
+    elif url == '/extensions/malwarebazaarhashchecker/':
+        return f"{doc}/tools/mb_hash_checker.html"
+    elif url == '/extensions/loldriverhashchecker/':
+        return f"{doc}/tools/lol_drivers_hash_checker.html"
+    elif url == '/extensions/whois/':
+        return f"{doc}/tools/whois.html"
+
+    # connectors    
+    elif url == '/connectors/connectorconf/':
+        return f"{doc}/plugins/index.html#settings"
+
+    # repos
+    elif url == '/repos/listrepos/':
+        return f"{doc}/repos/list_repos.html"
+    elif url == '/repos/addrepo/':
+        return f"{doc}/repos/add_repo.html"
+    elif re.match(r"^/repos/editrepo/\d+/", url):
+        return f"{doc}/repos/edit_repo.html"
+    elif re.match(r"^/repos/importrepo/\d+/check/", url):
+        return f"{doc}/repos/check_repo.html"
+    elif re.match(r"^/repos/importrepo/\d+/import/", url):
+        return f"{doc}/repos/import_repo.html"
+    elif re.match(r"^/repos/importreposelectanalytics/\d+/", url):
+        return f"{doc}/repos/import_repo.html"
+
+    # saved searches
+    elif re.match(r"^/qm/saved_searches/\d+/change/$", url):
+        return f"{doc}/modules/analytics.html#saved-searches"
+    elif re.match(r"^/qm/saved_searches/add/", url):
+        return f"{doc}/modules/analytics.html#saved-searches"
+
+    # else
+    else:
+        return doc

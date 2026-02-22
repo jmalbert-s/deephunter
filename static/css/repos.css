@@ -1,0 +1,112 @@
+form.form label {
+    /* only apply to label inside forms with the class "form" */
+    font-size: 14px;
+    width: 80px;
+    display: inline-block;
+}
+
+span.helptext {
+    font-style: italic;
+    color: #888;
+}
+
+table.form td,
+table.form th {
+    vertical-align: top;
+    padding: 5px;
+}
+
+.fa-github,
+.fa-bitbucket {
+    width: 60px;
+    height: 60px;
+    padding-bottom: 5px;
+}
+
+.fa-bucket,
+.fa-database,
+.fa-check,
+.fa-circle-exclamation,
+.fa-pen,
+.fa-trash {
+    width: 15px;
+    height: 15px;
+}
+
+span.icons {
+    margin-right: 15px;
+}
+
+.repo_container {
+    display: flex;
+}
+
+.repo_icon {
+    text-align: center;
+}
+
+.repo_icon, .repo_details {
+    padding: 10px;
+}
+
+h3.repo {
+    margin: 0 0 10px 0;
+}
+
+h3 a {
+    text-decoration: none;
+    font-size: 20px;
+}
+
+div.actions_buttons {
+    padding-top: 10px;
+}
+
+span.date {
+    font-size: 12px;
+    color: #888;
+    margin-right: 20px;
+}
+
+div.report_link {
+    margin: 5px;
+}
+
+img.img-repo-icon {
+    width: 80px;
+}
+
+span.icon {
+    padding: 5px;
+    color: #ccc;
+}
+span.icon a {
+    text-decoration: none;
+    color: #ccc;
+    cursor: pointer;
+    transition: color 0.3s ease; /* Smooth color transition */
+}
+
+span.icon a:hover {
+  color: #888;
+}
+
+.repo_visibility {
+    font-size: 12px;
+    color: #888;
+    margin-left: 10px;
+    border: solid 1px #ccc;
+	border-radius: 8px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.notification-message li > a:after {
+  content: '';
+}

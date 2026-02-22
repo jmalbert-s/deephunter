@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% load qm_extras %}
 
 {% block style %}
-<link rel="stylesheet" href="/static/css/list_queries.css" />
-<script src="/static/jquery/jquery.min.js"></script>
-<script src="/static/jquery_sparkline/jquery.sparkline.min.js"></script>
+	<link rel="stylesheet" href="/static/css/list_analytics.css" />
+{% endblock %}
+{% block js %}
+	<script src="/static/jquery_sparkline/jquery.sparkline.min.js"></script>
 {% endblock %}
 
 {% block body %}
@@ -14,26 +16,58 @@
 		<th>Runtime</th>
 		<th>Trend</th>
 		<th>Admin/Stats</th>
+		<th>Connector</th>
 		<th>Analytic</th>
+		<th>Status</th>
 	</tr>
-{% for query in queries %}
+{% for analytic in analytics %}
 	<tr>
-		<td class="acenter">{{ query.runtime|floatformat }} sec</td>
-		<td><span id="sparkline_{{ query.id }}"></span></td>
+		<td class="acenter">{{ analytic.runtime|floatformat }} sec</td>
+		<td><span id="sparkline_{{ analytic.id }}"></span></td>
 		<td>
-			[<a target="_blank" href="/admin/qm/query/{{ query.id }}/change/">admin</a>]
-			[<a target="_blank" href="/{{ query.id }}/trend/">stats</a>]
+			{% if perms.qm.change_analytic %}<a class="button" href="/qm/analytic/{{ analytic.id }}/change/">edit analytic</a>{% endif %}
+			{% if perms.qm.view_snapshot %}<a class="button" target="_blank" href="/qm/{{ analytic.id }}/trend/">stats</a>{% endif %}
 		</td>
-		<td>{{ query.name }}</td>
+		<td>{{ analytic.connector }}</td>
+		<td>{{ analytic.name }}</td>
+		<td><div class="{{ analytic.status|lower }}">{{ analytic.status }}</div></td>
 	</tr>	
 {% endfor %}
 </table>
+
+<div class="pagination">
+	<span class="step-links">
+		<span class="previous">
+			{% if analytics.has_previous %}
+			<a href="?page={{ analytics.previous_page_number }}">Previous</a>
+			{% endif %}
+		</span>
+
+		<span class="current">
+			{% for i in analytics.paginator.num_pages|to_range %}
+				{% if i == analytics.number %}
+					<span class="pagelink">{{ i }}</span>
+				{% else %}
+					<span class="pagelink"><a href="?page={{ i }}">{{ i }}</a></span>
+				{% endif %}
+			{% endfor %}
+		</span>
+
+		<span class="next">
+			{% if analytics.has_next %}
+				<span class="next"><a href="?page={{ analytics.next_page_number }}">Next</a></span>
+			{% endif %}
+		</span>
+	</span>
+</div>
+
 <script type="text/javascript" nonce="hf7hgo1ilm">
 $(function() {
-	{% for query in queries %}
-		$('#sparkline_{{ query.id }}').sparkline({{ query.sparkline }});
+	{% for analytic in analytics %}
+		$('#sparkline_{{ analytic.id }}').sparkline({{ analytic.sparkline }});
 	{% endfor %}
 });
 </script>
 
+<!--Query executed in {{ elapsed_time|floatformat:2 }} seconds.-->
 {% endblock %}

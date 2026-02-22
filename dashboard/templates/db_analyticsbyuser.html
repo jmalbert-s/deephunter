@@ -1,0 +1,42 @@
+<h3>Analytics by user</h3>
+<div id="analyticsByUser_chartContainer" class="chartContainer"></div>
+<script nonce="klf4do97jh">
+    $(document).ready(function() {
+    function clicklegenditem_analyticbyuser(e) {
+        window.location='/qm/listanalytics/?created_by='+e.dataPoint.id;
+    }
+
+        var chart = new CanvasJS.Chart("analyticsByUser_chartContainer", {
+            data: [{
+                type: "doughnut",
+                startAngle: 270,
+                explodeOnClick: false,
+                legendMarkerType: "square",
+                showInLegend: true,
+                legendText: "{name}: {y}",
+                /*legendFontSize: 14,*/
+                toolTipContent: "<b>{name}:</b> {y} (#percent%)",
+                dataPoints: [
+                    {% for analytic in analytics_breakdown %}
+                        { y: {{ analytic.count }},
+                        name: "{% if analytic.created_by__id == None %}(empty){% else %}{{ analytic.created_by__username }}{% endif %}",
+                        id: "{% if analytic.created_by__id == None %}0{% else %}{{ analytic.created_by__id }}{% endif %}",
+                        click: function(e) { window.location='/qm/listanalytics/?created_by={% if analytic.created_by__id == None %}0{% else %}{{ analytic.created_by__id }}{% endif %}'; } },
+                    {% endfor %}
+                ]
+            }],
+            legend: {
+                cursor: "pointer",
+                itemclick: clicklegenditem_analyticbyuser,
+                horizontalAlign: 'right',
+                verticalAlign: 'center',
+                fontSize: 14,
+                fontWeight: "normal",
+                fontFamily: "Arial"
+            }
+        });
+        
+        chart.render();
+
+    });
+</script>

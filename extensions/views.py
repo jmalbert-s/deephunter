@@ -1,33 +1,22 @@
 from django.conf import settings
-import requests
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required, permission_required
-from django.http import HttpResponse, HttpResponseRedirect, FileResponse, JsonResponse
-from bs4 import BeautifulSoup
-import re
-import vt
+from connectors.utils import is_valid_sha256
+
+# Dynamically import all connectors
+import importlib
+import pkgutil
+import plugins
+all_connectors = {}
+for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
+    module = importlib.import_module(f"plugins.{module_name}")
+    all_connectors[module_name] = module
+
 
 PROXY = settings.PROXY
-MALWAREBAZAAR_API_KEY = settings.MALWAREBAZAAR_API_KEY
-VT_API_KEY = settings.VT_API_KEY
-
-def is_valid_md5(hash: str) -> bool:
-    pattern = r'^[a-z-A-Z0-9]{32}$'
-    return re.match(pattern, hash) is not None
-    
-def is_valid_sha1(hash: str) -> bool:
-    pattern = r'^[a-z-A-Z0-9]{40}$'
-    return re.match(pattern, hash) is not None
-    
-def is_valid_sha256(hash: str) -> bool:
-    pattern = r'^[a-z-A-Z0-9]{64}$'
-    return re.match(pattern, hash) is not None
-
-def is_valid_ip(ip: str) -> bool:
-    pattern = r'^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
-    return re.match(pattern, ip) is not None
 
 @login_required
+@permission_required('extensions.view_extensions', raise_exception=True)
 def loldriverhashchecker(request):
 
     hashes = ''
@@ -38,15 +27,7 @@ def loldriverhashchecker(request):
         found_hashes = []
         hashes = request.POST['hashes']
         
-        response = requests.get(
-            'https://www.loldrivers.io/',
-            proxies=PROXY
-            )
-        soup = BeautifulSoup(response.text, "lxml")
-        #Created a list of lol driver SHA256 hashes
-        for link in soup.find_all("a", href=True):
-            if len(link.text) == 64:
-                lol_hashes.append(str(link.text))
+        lol_hashes = all_connectors.get('loldrivers').get_sha256_hashes()
         
         # search if any matching hash
         for hash in hashes.split('\r\n'):
@@ -62,6 +43,7 @@ def loldriverhashchecker(request):
     return render(request, 'loldriverhashchecker.html', context)
 
 @login_required
+@permission_required('extensions.view_extensions', raise_exception=True)
 def whois(request):
 
     ip = ''
@@ -69,19 +51,7 @@ def whois(request):
 
     if request.method == "POST":
         ip = request.POST['ip']
-        if is_valid_ip(ip):
-            try:
-                response = requests.get(
-                    'https://www.whois.com/whois/{}/'.format(ip),
-                    proxies=PROXY
-                    )
-                soup = BeautifulSoup(response.text, features="lxml")
-                elements = soup.find_all('pre', attrs={'id': 'registryData'})
-                whois = elements[0].text
-            except:
-                whois = 'Error. Please try to refresh the page.'
-        else:
-            whois = 'Invalid IP format'
+        whois = all_connectors.get('whois').whois(ip)
     else:
         whois = 'Provide an IP address in the above form.'
         
@@ -92,6 +62,7 @@ def whois(request):
     return render(request, 'whois.html', context)
 
 @login_required
+@permission_required('extensions.view_extensions', raise_exception=True)
 def malwarebazaarhashchecker(request):
 
     hashes = ''
@@ -101,29 +72,21 @@ def malwarebazaarhashchecker(request):
         output = []
         hashes = request.POST['hashes']
 
-        client = vt.Client(
-            MALWAREBAZAAR_API_KEY,
-            proxy=PROXY['https']
-        )
-
         for hash in hashes.split('\r\n'):
             hash = hash.strip()
-            if is_valid_sha256(hash):        
-                try:
-                    file = client.get_object("/files/{}".format(hash))
-                    output.append({
-                        'hash': hash,
-                        'foundinmb': 'Y',
-                        'malicious': file.last_analysis_stats['malicious'],
-                        'suspicious': file.last_analysis_stats['suspicious']
-                    })        
-                except:
-                    output.append({
-                        'hash': hash,
-                        'foundinmb': 'N',
-                        'malicious': '',
-                        'suspicious': ''
-                    })        
+            r = all_connectors.get('malwarebazaar').check_hash(hash)
+            if r:
+                output.append({
+                    'hash': hash,
+                    'foundinmb': 'Y',
+                    'signature': r['signature']
+                })        
+            else:
+                output.append({
+                    'hash': hash,
+                    'foundinmb': 'N',
+                    'signature': ''
+                })
                         
     context = {
         'hashes': hashes,
@@ -132,6 +95,7 @@ def malwarebazaarhashchecker(request):
     return render(request, 'malwarebazaarhashchecker.html', context)
 
 @login_required
+@permission_required('extensions.view_extensions', raise_exception=True)
 def vthashchecker(request):
 
     hashes = ''
@@ -141,29 +105,23 @@ def vthashchecker(request):
         output = []
         hashes = request.POST['hashes']
 
-        client = vt.Client(
-            VT_API_KEY,
-            proxy=PROXY['https']
-        )
-
         for hash in hashes.split('\r\n'):
             hash = hash.strip()
-            if is_valid_md5(hash) or is_valid_sha1(hash) or is_valid_sha256(hash):        
-                try:
-                    file = client.get_object("/files/{}".format(hash))
-                    output.append({
-                        'hash': hash,
-                        'foundinvt': 'Y',
-                        'malicious': file.last_analysis_stats['malicious'],
-                        'suspicious': file.last_analysis_stats['suspicious']
-                    })        
-                except:
-                    output.append({
-                        'hash': hash,
-                        'foundinvt': 'N',
-                        'malicious': '',
-                        'suspicious': ''
-                    })        
+            file = all_connectors.get('virustotal').check_hash(hash)
+            if file:
+                output.append({
+                    'hash': hash,
+                    'foundinvt': 'Y',
+                    'malicious': file.last_analysis_stats['malicious'],
+                    'suspicious': file.last_analysis_stats['suspicious']
+                })        
+            else:
+                output.append({
+                    'hash': hash,
+                    'foundinvt': 'N',
+                    'malicious': '',
+                    'suspicious': ''
+                })        
                         
     context = {
         'hashes': hashes,
@@ -172,6 +130,7 @@ def vthashchecker(request):
     return render(request, 'vthashchecker.html', context)
 
 @login_required
+@permission_required('extensions.view_extensions', raise_exception=True)
 def vtipchecker(request):
 
     ips = []
@@ -180,32 +139,21 @@ def vtipchecker(request):
     if request.method == "POST":
         ips = request.POST['ips']
 
-        headers = {
-            'x-apikey': VT_API_KEY,
-            'accept': 'application/json'
-		}
-
         for ip in ips.split('\r\n'):
-            ip = ip.strip()
-            if is_valid_ip(ip):
-                
-                vt = {}
-                response = requests.get(
-                    f"https://www.virustotal.com/api/v3/ip_addresses/{ip}",
-                    headers=headers,
-                    proxies=PROXY
-                    )
-                vt['ip'] = ip
-                try:
-                    vt['malicious'] = response.json()['data']['attributes']['last_analysis_stats']['malicious']
-                    vt['suspicious'] = response.json()['data']['attributes']['last_analysis_stats']['suspicious']
-                    vt['whois'] = response.json()['data']['attributes']['whois']
-                except:
-                    vt['malicious'] = 'N/A'
-                    vt['suspicious'] = 'N/A'
-                    vt['whois'] = 'N/A'
+            ip = ip.strip()            
+            vt = {}
+            response = all_connectors.get('virustotal').check_ip(ip)
+            vt['ip'] = ip
+            try:
+                vt['malicious'] = response['attributes']['last_analysis_stats']['malicious']
+                vt['suspicious'] = response['attributes']['last_analysis_stats']['suspicious']
+                vt['whois'] = response['attributes']['whois']
+            except:
+                vt['malicious'] = 'N/A'
+                vt['suspicious'] = 'N/A'
+                vt['whois'] = 'N/A'
 
-                output.append(vt)
+            output.append(vt)
                         
     context = {
         'ips': ips,

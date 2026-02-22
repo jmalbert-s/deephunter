@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load qm_extras %}
+
+{% block style %}
+	<link rel="stylesheet" href="/static/css/list_analytics.css" />
+{% endblock %}
+
+{% block body %}
+<h1>Analytics with rare occurences</h1>
+<p>This report shows Threat Hunting Analytics with few distinct endpoints in the entire database. It may be a useful indicator to identify suspicious behaviors.</p>
+<table class="mitre">
+	<tr>
+		<th>Connector</th>
+		<th>Analytic</th>
+		<th>Status</th>
+		<th>Category</th>
+		<th>Confidence</th>
+		<th>Relevance</th>
+		<th>Admin/Stats</th>
+		<th># distinct endpoints</th>
+		<th>Endpoints</th>
+	</tr>
+	{% for analytic in analytics %}
+	<tr>
+		<td class="acenter">{{ analytic.connector }}</td>
+		<td title="DESCRIPTION:&#013;===========&#013;{{ analytic.description }}&#013;&#013;QUERY:&#013;===========&#013;{{analytic.query}}">{{ analytic.name }}</td>
+        <td class="acenter"><div class="{{ analytic.status|lower }}">{{ analytic.status }}</div></td>
+        <td class="acenter">{% if analytic.category %}{{ analytic.category }}{% else %}-{% endif %}</td>
+        <td class="acenter"><div class="level_{{ analytic.confidence }} level">{{ analytic.confidence|confidencelabel }}</div></td>
+        <td class="acenter"><div class="level_{{ analytic.relevance }} level">{{ analytic.relevance|confidencelabel }}</div></td>
+		<td class="acenter">
+			{% if perms.qm.change_analytic %}<a class="button" href="/qm/analytic/{{ analytic.id }}/change/">edit analytic</a>{% endif %}
+			{% if perms.qm.view_snapshot %}<a class="button" href="/qm/{{ analytic.id }}/trend/" target="_blank">stats</a>{% endif %}
+		</td>
+		<td class="acenter">{{ analytic.distinct_hostnames }}</td>
+		<td>
+			{% if analytic.endpoints %}
+				{% for endpoint in analytic.endpoints %}
+					{% if perms.qm.view_timeline %}
+						<a href="/qm/timeline?hostname={{ endpoint }}" target="_blank">{{ endpoint }}</a> |
+					{% else %}
+						{{ endpoint }} |
+					{% endif %}
+				{% endfor %}
+			{% endif %}
+		</td>
+
+	</tr>
+	{% endfor %}
+</table>
+
+<div class="pagination">
+	<span class="step-links">
+		<span class="previous">
+			{% if analytics.has_previous %}
+			<a href="?page={{ analytics.previous_page_number }}">Previous</a>
+			{% endif %}
+		</span>
+
+		<span class="current">
+			{% for i in analytics.paginator.num_pages|to_range %}
+				{% if i == analytics.number %}
+					<span class="pagelink">{{ i }}</span>
+				{% else %}
+					<span class="pagelink"><a href="?page={{ i }}">{{ i }}</a></span>
+				{% endif %}
+			{% endfor %}
+		</span>
+
+		<span class="next">
+			{% if analytics.has_next %}
+				<span class="next"><a href="?page={{ analytics.next_page_number }}">Next</a></span>
+			{% endif %}
+		</span>
+	</span>
+</div>
+
+<!--Query executed in {{ elapsed_time|floatformat:2 }} seconds.-->
+{% endblock %}

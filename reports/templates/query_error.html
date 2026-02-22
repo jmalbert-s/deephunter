@@ -1,46 +1,41 @@
 {% extends "base.html" %}
 
 {% block style %}
-<link rel="stylesheet" href="/static/css/list_queries.css" />
+	<link rel="stylesheet" href="/static/css/list_analytics.css" />
+{% endblock %}
+{% block js %}
+    <script src="/static/fontawesome/all.min.js"></script>
 {% endblock %}
 
 {% block body %}
-<h1>Threat Hunting Analytics with errors</h1>
-<p>This report shows the list of Threat Hunting Analytics that have failed due to errors.</p>
-<p>Notice that updating the "query" field of threat hunting analytics will automatically remove the error flag and message. These threat hunting analytics will no longer appear in this report.</p>
-<table class="mitre">
-	<tr>
-		<th>Admin/Stats</th>
-		<th>Analytic</th>
-		<th>Query</th>
-		<th>Maxhosts Count</th>
-		<th>Run daily</th>
-		<th>Category</th>
-		<th>Message</th>
-	</tr>
-{% for query in queries %}
-	<tr>
-		<td>
-			[<a target="_blank" href="/admin/qm/query/{{ query.id }}/change/">admin</a>]
-			[<a target="_blank" href="/{{ query.id }}/trend/">stats</a>]
-		</td>
-		<td>{{ query.name }}</td>
-		<td><pre>{{ query.query }}</pre></td>
-		<td class="acenter">{{ query.maxhosts_count }}</td>
-		<td class="acenter">
-			{% if query.run_daily %}
-				<img src="/static/admin/img/icon-yes.svg" alt="yes" />
-			{% else %}
-				<img src="/static/admin/img/icon-no.svg" alt="no" />
-			{% endif %}
-		</td>
-		<td>{% if 'error' in query.query_error_message %}
-			<div class="msg_error">ERROR</div>
-		{% else %}
-			<div class="msg_warning">INFO</div>
-		{% endif %}</td>
-		<td><pre>{{ query.query_error_message }}</pre></td>
-	</tr>	
-{% endfor %}
-</table>
+<div class="padaround">
+	<h1>Threat Hunting Analytics with errors</h1>
+
+	<div class="alert alert-info d-flex flex-row">
+		<div class="padright20"><i class="fas fa-fw fa-info-circle mr-3 mt-1"></i></div>
+		<div>
+			<div class="notification-message">
+				<ul>
+					<li>This report shows the list of Threat Hunting Analytics that have failed due to errors.</li>
+					<li>Notice that updating the "query" field of threat hunting analytics will automatically remove the error flag and message. These threat hunting analytics will no longer appear in this report.</li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<form id="filter-form">
+		<label>
+			<input type="checkbox" id="include-info" name="include_info" 
+				hx-get="{% url 'query_error_table' %}" 
+				hx-target="#message-table" 
+				hx-include="#filter-form" 
+				hx-trigger="load, change">
+			Include INFO messages
+		</label>
+	</form>
+
+	<div id="message-table">
+		{% include 'partials/query_error_table.html' %}
+	</div>
+</div>
 {% endblock %}

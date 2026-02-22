@@ -1,39 +1,51 @@
-table, th, td {
-	border: solid 1px #ccc;
-	border-collapse: collapse;
-}
-td {
-	text-align:right;
-}
-td.red {
-	background:#f28563;
-	color:#fff;
-}
-.w25 {
-	float:left;
-	width:25%;
-}
-.m10 {
-	margin:10px;
-}
-.highlight_yellow {
-	background:#fffbb5;
+.container_trend {
+  display: flex;
+  width: 100%;
 }
 
 .charts_left {
-	float:left;
-	width:50%;
+  flex: 1; /* Takes up remaining space */
 }
+
 .charts_right {
+  width: 700px; /* Fixed width */
+}
+.charts_right_tab {
+  width: 300px; /* Fixed width */
+}
+
+
+
+.chartContainer {
+	height: 270px;
+}
+.chartContainer_small {
+	height: 150px;
+}
+
+div.progress {
 	float:right;
-	width:50%;
 }
-.clear {
-	clear: both;
+.buttonred {
+  font: bold 13px Arial;
+  text-decoration: none;
+  color: #ff0000;
+  padding: 2px 6px 2px 6px;
+  border: solid 1px #ff0000;
+	border-radius: 8px;
 }
-#chartContainer_runtime, #chartContainer_count, #chartContainer_endpoints {
-	height: 270px;
+
+div.paragraph {
+	margin-top: 30px;
 }
-#chartContainer_c1, #chartContainer_c2, #chartContainer_c3 {
-	height: 270px;
+
+h2 {
+	font-size: 10pt;
+}
+pre {
+    white-space: pre-wrap;       /* Since CSS 2.1 */
+    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+    white-space: -pre-wrap;      /* Opera 4-6 */
+    white-space: -o-pre-wrap;    /* Opera 7 */
+    word-wrap: break-word;       /* Internet Explorer 5.5+ */
 }

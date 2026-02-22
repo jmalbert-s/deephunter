@@ -1,0 +1,140 @@
+{% load qm_extras %}
+{% load markup_tags %}
+<html>
+	<head>
+		<link rel="stylesheet" href="/static/jquery-ui/jquery-ui.min.css" />
+		<link rel="stylesheet" href="/static/css/tabs.css" />
+		<script src="/static/jquery-ui/jquery-ui.min.js"></script>
+		<script src="/static/js/htmx.min.js"></script>
+	</head>
+	<body>
+
+<div id="tabs_{{ analytic.id }}">
+	<ul>
+		<li><a href="#details_{{ analytic.id }}"><span>Details</span></a></li>
+		{% if perms.qm.view_snapshot %}<li><a href="#trend_{{ analytic.id }}" hx-get="/qm/{{ analytic.id }}/trend/1/" hx-target="#trend_{{ analytic.id }}"><span>Trend</span></a></li>{% endif %}
+		{% if perms.qm.view_review %}<li><a href="#review_{{ analytic.id }}" hx-get="/qm/review_page/{{ analytic.id }}/" hx-target="#review_{{ analytic.id }}"><span>Review</span></a></li>{% endif %}
+	</ul>
+	<div id="details_{{ analytic.id }}">
+
+		<div class="m10">
+			{% if perms.qm.run_query %}<a href="/qm/events/{{ analytic.id }}/" target="_blank" class="button">Run query</a>{% endif %}
+			{% if perms.qm.change_analytic and analytic.status != 'REVIEW' %}<a href="/qm/analytic/{{ analytic.id }}/change/" class="button">Edit analytic</a>{% endif %}
+			{% if perms.qm.add_analytic %}<a href="/qm/analytic/{{ analytic.id }}/clone/" class="button">Clone analytic</a>{% endif %}
+			{% if perms.qm.view_historicalanalytic %}<a href="/admin/qm/analytic/{{ analytic.id }}/history/" target="_blank" class="button">History</a>{% endif %}
+			{% if perms.qm.delete_analytic and analytic.status != 'REVIEW' %}<span class="pad20"><a href="/qm/deleteanalytic/{{ analytic.id }}/" class="buttonred">Delete</a></span>{% endif %}
+		</div>
+
+		{% if endpoints %}
+		<div class="ml40">
+			<b>Top 10 endpoints (last campaign): </b>
+			{% for endpoint in endpoints %}
+				<a href="/qm/timeline?hostname={{ endpoint }}" target="_blank">{{ endpoint }}</a> |
+			{% endfor %}
+			<a href="/admin/qm/endpoint/?snapshot__analytic__name={{ analytic.name }}" target="_blank">See all endpoints...</a>
+		</div>
+		{% endif %}
+
+		<div class="ml40">
+			<b>Created by: </b>{% if analytic.created_by %}<span title="{{ analytic.created_by.first_name }} {{ analytic.created_by.last_name }}">{{ analytic.created_by }}</span>{% else %}-{% endif %}
+			&nbsp;|&nbsp;<b>Created on: </b>{{ analytic.pub_date }}
+			&nbsp;|&nbsp;<b>Last time seen: </b>{% if analytic.analyticmeta.last_time_seen %}{{ analytic.analyticmeta.last_time_seen }}{% else %}-{% endif %}
+		</div>
+		<div class="ml40">
+			<b>Tags: </b>{% if analytic.tags %}{% for tag in analytic.tags.all %}{{ tag.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
+		</div>
+		<div class="ml40">
+			<b>Repo: </b>{% if analytic.repo %}{{ analytic.repo.name }}{% else %}-{% endif %}
+		</div>
+
+		<h1>DESCRIPTION</h1>
+		<div class="description" hx-get="/qm/edit_description_initial/{{ analytic.id }}/" hx-trigger="load"></div>
+
+		<h1>THREAT HUNTING NOTES</h1>
+		<div class="description" hx-get="/qm/edit_notes_initial/{{ analytic.id }}/" hx-trigger="load"></div>
+
+		<h1>QUERY</h1>
+		{% if analytic.analyticmeta.query_error %}<div class="{% if 'errors' in analytic.analyticmeta.query_error_message %}errormsg{% else %}warningmsg{% endif %}">{{ analytic.analyticmeta.query_error_message }}</div>{% endif %}
+		<div class="w1000 ml40{% if analytic.analyticmeta.query_error %}{% if 'errors' in analytic.analyticmeta.query_error_message %} errorquery{% else %} warningquery{% endif %}{% endif %}"
+			hx-get="/qm/edit_query_initial/{{ analytic.id }}/" hx-trigger="load"></div>
+
+		<h1>THREAT COVERAGE</h1>
+		<ul>
+			<li><b>Target OS: </b>
+				{% for os in analytic.target_os.all %}
+					<svg xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 448 512"><path d="{{ os.name|os2icon }}"/></svg>
+				{% endfor %}
+			</li>
+			<li><b>Vulnerabilities: </b>
+				<ul>
+				{% for vulnerability in analytic.vulnerabilities.all %}
+					<li><div class="floatleft" title="{{ vulnerability.description }}">{{ vulnerability.name }}</div>
+					<div class="vuln cve_{{ vulnerability.base_score|cvecolor }}">{{ vulnerability.base_score }}</div>
+					{% if vulnerability.references %}&nbsp;&nbsp;{% for link in vulnerability.references|links %} [<a href="{{ link }}" target="_blank">link</a>]{% endfor %}{% endif %}
+					</li>
+				{% endfor %}
+				</ul>
+			</li>
+			<li><b>Associated Threat Actors: </b>
+				<ul>
+				{% for actor in analytic.actors.all %}
+					<li>{{ actor.name }}{% if actor.aka_name %} ({{ actor.aka_name }}){% endif %} | Source country: {{ actor.source_country }}
+					{% if actor.references %}{% for link in actor.references|links %} [<a href="{{ link }}" target="_blank">link</a>]{% endfor %}{% endif %}
+					</li>
+				{% endfor %}
+				</ul>
+			</li>
+			<li><b>Associated Threats: </b>
+				<ul>
+				{% for threat in analytic.threats.all %}
+					<li>{{ threat.name }}{% if threat.aka_name %} ({{ threat.aka_name }}){% endif %}
+					{% if threat.references %}{% for link in threat.references|links %} [<a href="{{ link }}" target="_blank">link</a>]{% endfor %}{% endif %}
+					</li>
+				{% endfor %}
+				</ul>
+			</li>
+		</ul>
+
+		<h1>MITRE INFORMATION</h1>
+			<table class="mitre ml40">
+				<tr><th>Tactic</th><th>Technique</th><th>Sub-technique</th></tr>
+					{% for t in analytic.mitre_techniques.all %}
+						<tr>
+							<td>
+							{% for tac in t.mitre_tactic.all %}
+								<div><a href="https://attack.mitre.org/tactics/{{ tac.mitre_id }}/" target="_blank" title="{{ tac.description }}">{{ tac.name }}</a></div>
+							{% endfor %}
+							</td>
+						{% if t.is_subtechnique %}
+							<td><a href="https://attack.mitre.org/techniques/{{ t.mitre_technique.mitre_id }}/" target="_blank" title="{{ t.mitre_technique.description }}">{{ t.mitre_technique }}</a></td>
+							<td><a href="https://attack.mitre.org/techniques/{{ t.mitre_id|repl }}/" target="_blank" title="{{ t.description }}">{{ t }}</a></td>
+						{% else %}
+							<td><a href="https://attack.mitre.org/techniques/{{ t.mitre_id }}/" target="_blank" title="{{ t.description }}">{{ t }}</a></td>
+							<td>-</td>
+						{% endif %}
+						</tr>
+					{% endfor %}
+			</table>
+
+		<h1>EMULATION & VALIDATION</h1>
+		{% if analytic.emulation_validation %}<div class="description">{{ analytic.emulation_validation|apply_markup:"markdown" }}</div>{% endif %}
+
+		<h1>REFERENCES</h1>
+		{% if analytic.references %}<ul>{% for link in analytic.references|links %}<li><a href="{{ link }}" target="_blank">{{ link }}</a></li>{% endfor %}</ul>{% endif %}
+
+	</div>
+
+	{% if perms.qm.view_snapshot %}<div id="trend_{{ analytic.id }}"></div>{% endif %}
+
+	{% if perms.qm.view_review %}<div id="review_{{ analytic.id }}"></div>{% endif %}
+
+</div>
+
+<script type="text/javascript" nonce="jg6kl5z3v2">
+	$(document).ready(function() {
+		$( "#tabs_{{ analytic.id }}" ).tabs();
+	});
+</script>
+
+	</body>
+</html>

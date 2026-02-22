@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block style %}
+    <link rel="stylesheet" href="/static/css/list_analytics.css" />
+{% endblock %}
+{% block js %}
+    <script src="/static/fontawesome/all.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<div class="padaround">
+	<h1>Saved Searches</h1>
+
+	<div class="alert alert-info d-flex flex-row">
+		<div class="padright20"><i class="fas fa-fw fa-info-circle mr-3 mt-1"></i></div>
+        <div class="notification-message">
+            To add a new saved search, apply some filters to the <a href="/qm/listanalytics">analytics view</a> and click the "Save search" button.
+        </div>
+	</div>
+
+	<form id="filter-form">
+		<label>
+			<input type="checkbox" id="only-show-user-saved-searches" name="only_show_user_saved_searches" 
+				hx-get="{% url 'saved_searches_table' %}" 
+				hx-target="#saved-searches-table" 
+				hx-include="#filter-form" 
+				hx-trigger="load, change">
+			Only show my saved searches
+		</label>
+	</form>
+
+    <div id="saved-searches-table">
+        {% include "partials/saved_searches_table.html" %}
+    </div>
+</div>
+{% endblock %}

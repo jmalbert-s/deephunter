@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block style %}
+    <link rel="stylesheet" href="/static/css/list_analytics.css" />
+{% endblock %}
+
+{% block body %}
+<div class="padaround">
+    <h1>Manage campaigns</h1>
+
+    <div class="alert alert-warning d-flex flex-row">
+        <div class="padright20"><i class="fas fa-fw fa-exclamation-triangle mr-3 mt-1"></i></div>
+        <div class="notification-message">
+            <li>Regenerating a campaign will destroy existing data for the selected campaign.</li>
+            <li>The regenerated campaign will run threat analytics with the 'run daily' flag set as of today. You may see differences in the results compared to the previous campaign, as the "run_daily" flag may have been updated for some analytics, and newer analytics may have been created since.</li>
+        </div>
+    </div>
+	<div class="alert alert-info d-flex flex-row">
+		<div class="padright20"><i class="fas fa-fw fa-info-circle mr-3 mt-1"></i></div>
+        <div class="notification-message">
+            The number of analytics in target is based on the 'run daily' flag. The completion indicates potential errors while running analytics.
+        </div>
+	</div>
+
+
+    {% if campaigns %}
+        <table class="mitre">
+            <thead>
+                <tr>
+                    <th>Actions</th>
+                    <th>Campaign</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th># queries<br />(target)</th>
+                    <th># queries<br />(run)</th>
+                    <th>Completion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for campaign in campaigns %}
+                    <tr>
+                        <td>{% if perms.qm.change_campaign %}<div hx-get="/qm/regencampaignstatus/{{ campaign.name }}/" hx-trigger="load, every 2s"></div>{% endif %}</td>
+                        <td>{{ campaign.name }}</td>
+                        <td>{{ campaign.date_start }}</td>
+                        <td>{{ campaign.date_end }}</td>
+                        <td class="aright">{{ campaign.nb_queries_target }}</td>
+                        <td class="aright">{{ campaign.nb_queries_run }}</td>
+                        <td class="aright">{{ campaign.completion }}%</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No campaigns found.</p>
+    {% endif %}
+
+</div>
+{% endblock %}

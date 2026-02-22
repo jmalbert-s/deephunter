@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block style %}
+    <link rel="stylesheet" href="/static/css/list_analytics.css" />
+    <link rel="stylesheet" href="/static/css/repos.css" />
+{% endblock %}
+
+{% block js %}
+    <script src="/static/fontawesome/all.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<div class="padaround">
+
+    <h1>Repos</h1>
+
+    {% if perms.repos.add_repo %}<p><a href="/repos/addrepo/" class="button">Add a new repo</a></p>{% endif %}
+
+    <hr />
+    {% for repo in repos %}
+
+        <div class="repo_container">
+
+            <div class="repo_icon">
+                {% if 'github.com' in repo.url %}
+                    <img class="img-repo-icon" src="/static/images/connectors/github.png" alt="github" />
+                {% else %}
+                    <img class="img-repo-icon" src="/static/images/connectors/bitbucket.png" alt="bitbucket" />
+                {% endif %}
+                <div>
+                    {% if perms.repos.change_repo %}<span class="icon"><a href="/repos/editrepo/{{ repo.id }}/" title="Edit"><i class="fa-solid fa-pen"></i></a></span>{% endif %}
+                    {% if perms.repos.delete_repo %}<span class="icon"><a href="/repos/deleterepo/{{ repo.id }}/" title="Delete"><i class="fa-solid fa-trash"></i></a></span>{% endif %}
+                </div>
+            </div>
+            
+            <div class="repo_details">
+                <h3 class="repo">
+                    <a href="{{ repo.url }}" target="_blank" title="{{ repo.url }}">{{ repo.name }}</a>
+                    <span class="repo_visibility">{% if repo.is_private %}private{% else %}public{% endif %}</span>
+                </h3>
+                <div class="repo_import_info" hx-get="/repos/{{ repo.id }}/get-repo-import-info/" hx-trigger="load, every 10s"></div>
+                <div class="actions_buttons">
+                    <span hx-get="/repos/{{ repo.id }}/progress-import-repo/" hx-trigger="load, every 3s"></span>
+                </div>
+            </div>
+
+
+        </div>
+
+        <hr />
+    {% endfor %}
+
+</div>
+{% endblock %}

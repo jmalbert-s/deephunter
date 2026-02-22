@@ -1,0 +1,47 @@
+<h3>Upcoming analytics to review (next 2 wks)</h3>
+<div id="analyticsReviewsWorkload_chartContainer" class="chartContainer"></div>
+<script nonce="jK4hG2t713">
+
+$(document).ready(function() {
+
+	var options = {
+		animationEnabled: false,
+		axisX:{
+			valueFormatString: "DD MMM"
+		},
+		axisY:{
+			minimum: 0,
+			gridThickness: 0
+		},
+		toolTip:{
+			shared:true
+		},
+		data: [
+		{
+			type: "column",
+			showInLegend: true,
+			name: "",
+			markerType: "square",
+			xValueFormatString: "DD MMM, YYYY",
+			color: "#2596be",
+			yValueFormatString: "#,##0",
+			dataPoints: [
+				{% for analytic in analytics %}
+					{
+						x: new Date("{{ analytic.analyticmeta__next_review_date|date:"Y-m-d" }}"),
+						y: {{ analytic.count }}
+					},
+				{% endfor %}
+			],
+			click: function(e) {
+				window.location.href = "/reports/upcoming-analytic-reviews/";
+			}
+		}
+		]
+	};
+
+	$("#analyticsReviewsWorkload_chartContainer").CanvasJSChart(options);
+
+});
+
+</script>
