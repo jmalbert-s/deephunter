@@ -15,6 +15,82 @@ from django.conf import settings
 from connectors.utils import get_connector_conf
 import ast
 
+
+def get_connector_metadata():
+    return {
+        'description': (
+            "Entra ID is the new name for Microsoft's cloud-based identity and access "
+            "management service, formerly known as Azure Active Directory. It helps "
+            "organizations manage and secure user identities to control access to "
+            "applications, data, and resources across multicloud and on-premises "
+            "environments. Entra ID uses Zero Trust principles to ensure that only "
+            "authenticated and authorized users can access what they need."
+        ),
+        'domain': 'authentication',
+        'connector_conf': [
+            {
+                'key': 'CLIENT_ID',
+                'value': 'thisisclientid',
+                'fieldtype': 'char',
+                'description': 'The Client ID provided by Entra ID for OAuth2 authentication.',
+            },
+            {
+                'key': 'CLIENT_SECRET',
+                'value': '**************',
+                'fieldtype': 'password',
+                'description': 'The Client Secret provided by Entra ID for OAuth2 authentication.',
+            },
+            {
+                'key': 'SERVER_METADATA_URL',
+                'value': 'https://login.microsoftonline.com/foo-blah-replace-content/.well-known/openid-configuration',
+                'fieldtype': 'char',
+                'description': 'The Server Metadata URL for Entra ID.',
+            },
+            {
+                'key': 'SCOPE',
+                'value': 'openid profile email',
+                'fieldtype': 'char',
+                'description': 'Additional parameters for the client.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_USERNAME',
+                'value': 'unique_name',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for username.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_FIRST_NAME',
+                'value': 'given_name',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for first name.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_LAST_NAME',
+                'value': 'family_name',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for last name.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_EMAIL',
+                'value': 'upn',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for email.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_GROUPS',
+                'value': 'roles',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for groups.',
+            },
+            {
+                'key': 'USER_GROUPS_MEMBERSHIP',
+                'value': "{'viewer': 'AD_deephunter_usr', 'manager': 'AD_deephunter_pr'}",
+                'fieldtype': 'char',
+                'description': 'User groups membership mapping.',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, CLIENT_ID, CLIENT_SECRET, SERVER_METADATA_URL, SCOPE, AUTH_TOKEN_MAPPING

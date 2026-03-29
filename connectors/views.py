@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from config.utils import touch
 from django.conf import settings
 import os
+import logging
 from notifications.utils import add_error_notification
 import shutil
 
@@ -20,6 +21,59 @@ for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.catalog.__path__
     all_catalog_connectors[module_name] = module
 
 BASE_DIR = settings.BASE_DIR
+logger = logging.getLogger(__name__)
+
+
+def _extract_description(module):
+    """Extract a human-readable description from a plugin's docstring."""
+    doc = getattr(module, '__doc__', '') or ''
+    # If the docstring has a "Description\n-----------\n" section, use the text after it.
+    marker = 'Description\n-----------\n'
+    if marker in doc:
+        return doc.split(marker, 1)[1].strip()
+    # Otherwise fall back to the full docstring, cleaned up.
+    return doc.strip()
+
+
+def sync_catalog_connectors():
+    """
+    Ensure every plugin in plugins/catalog/ has a matching Connector row
+    (and ConnectorConf rows) in the database.  Called each time the Catalog
+    page is loaded so that newly added or updated plugins are visible
+    without a manual fixture reload or upgrade script.
+    """
+    for module_name, module in all_catalog_connectors.items():
+        try:
+            if hasattr(module, 'get_connector_metadata'):
+                meta = module.get_connector_metadata()
+                description = meta.get('description', _extract_description(module))
+                domain = meta.get('domain', '')
+                connector_conf = meta.get('connector_conf', [])
+            else:
+                description = _extract_description(module)
+                domain = ''
+                connector_conf = []
+
+            connector, _created = Connector.objects.update_or_create(
+                name=module_name,
+                defaults={
+                    'description': description,
+                    'domain': domain,
+                },
+            )
+
+            for conf in connector_conf:
+                ConnectorConf.objects.get_or_create(
+                    connector=connector,
+                    key=conf['key'],
+                    defaults={
+                        'value': conf.get('value', ''),
+                        'fieldtype': conf.get('fieldtype', 'char'),
+                        'description': conf.get('description', ''),
+                    },
+                )
+        except Exception:
+            logger.exception("Failed to sync catalog connector '%s'", module_name)
 
 @login_required
 @permission_required('connectors.change_connectorconf', raise_exception=True)
@@ -69,6 +123,7 @@ def catalog(request):
 @login_required
 @permission_required('connectors.add_connector', raise_exception=True)
 def filter_catalog(request):
+    sync_catalog_connectors()
     connectors = Connector.objects.all()
     if request.method == "POST":
 

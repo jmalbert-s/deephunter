@@ -15,6 +15,81 @@ from django.conf import settings
 from connectors.utils import get_connector_conf
 import ast
 
+
+def get_connector_metadata():
+    return {
+        'description': (
+            "PingID is a multi-factor authentication (MFA) service from Ping Identity "
+            "that adds an extra layer of security to user sign-ins. It is a cloud-based "
+            "service that uses a mobile app and various methods like push notifications, "
+            "one-time passcodes (OTPs) via SMS or email, and QR codes to verify user "
+            "identities, making it more secure than just a password."
+        ),
+        'domain': 'authentication',
+        'connector_conf': [
+            {
+                'key': 'CLIENT_ID',
+                'value': 'thisisclientid',
+                'fieldtype': 'char',
+                'description': 'The Client ID provided by PingID for OAuth2 authentication.',
+            },
+            {
+                'key': 'CLIENT_SECRET',
+                'value': '**************',
+                'fieldtype': 'password',
+                'description': 'The Client Secret provided by PingID for OAuth2 authentication.',
+            },
+            {
+                'key': 'SERVER_METADATA_URL',
+                'value': 'https://ping-sso.domains.com/.well-known/openid-configuration',
+                'fieldtype': 'char',
+                'description': 'The Server Metadata URL for PingID.',
+            },
+            {
+                'key': 'SCOPE',
+                'value': 'openid groups profile email',
+                'fieldtype': 'char',
+                'description': 'Additional parameters for the client.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_USERNAME',
+                'value': 'sub',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for username.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_FIRST_NAME',
+                'value': 'firstName',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for first name.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_LAST_NAME',
+                'value': 'lastName',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for last name.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_EMAIL',
+                'value': 'email',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for email.',
+            },
+            {
+                'key': 'AUTH_TOKEN_MAPPING_GROUPS',
+                'value': 'groups',
+                'fieldtype': 'char',
+                'description': 'Authentication token mapping for groups.',
+            },
+            {
+                'key': 'USER_GROUPS_MEMBERSHIP',
+                'value': "{'viewer': 'AD_deephunter_usr', 'manager': 'AD_deephunter_pr', 'threathunter': 'AD_deephunter_th'}",
+                'fieldtype': 'char',
+                'description': 'User groups membership mapping.',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, CLIENT_ID, CLIENT_SECRET, SERVER_METADATA_URL, SCOPE, AUTH_TOKEN_MAPPING

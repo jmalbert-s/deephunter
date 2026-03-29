@@ -28,6 +28,69 @@ from urllib.parse import quote, unquote
 import re
 from notifications.utils import add_debug_notification
 
+
+def get_connector_metadata():
+    return {
+        'description': 'Microsoft Sentinel data lake',
+        'domain': 'analytics',
+        'connector_conf': [
+            {
+                'key': 'TENANT_ID',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': '',
+            },
+            {
+                'key': 'CLIENT_ID',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': '',
+            },
+            {
+                'key': 'CLIENT_SECRET',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': '',
+            },
+            {
+                'key': 'WORKSPACE_ID',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': 'Log Analytics Workspace ID',
+            },
+            {
+                'key': 'SYNC_RULES',
+                'value': 'False',
+                'fieldtype': 'bool',
+                'description': '',
+            },
+            {
+                'key': 'SUBSCRIPTION_ID',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': '',
+            },
+            {
+                'key': 'RESOURCE_GROUP',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': '',
+            },
+            {
+                'key': 'WORKSPACE_NAME',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': '',
+            },
+            {
+                'key': 'QUERY_ERROR_INFO',
+                'value': '',
+                'fieldtype': 'char',
+                'description': 'Regular expression to filter what should be considered INFO instead of ERROR in query error message',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, TENANT_ID, CLIENT_ID, CLIENT_SECRET, SUBSCRIPTION_ID, WORKSPACE_ID, \

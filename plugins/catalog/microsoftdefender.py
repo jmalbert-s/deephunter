@@ -44,6 +44,52 @@ import re
 from notifications.utils import add_debug_notification
 from datetime import date
 
+
+def get_connector_metadata():
+    return {
+        'description': (
+            'This connector replaces the "microsoftsentinel" connector (legacy). '
+            'Notice that it requires the "AdvancedHunting.Read.All" permission.\n\n'
+            'Microsoft Defender provides a unified cybersecurity solution that integrates '
+            'endpoint protection, cloud security, identity protection, email security, '
+            'threat intelligence, exposure management, and SIEM into a centralized '
+            'platform powered by a modern data lake.'
+        ),
+        'domain': 'analytics',
+        'connector_conf': [
+            {
+                'key': 'TENANT_ID',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': 'MS Defender Tenant ID / Directory ID',
+            },
+            {
+                'key': 'CLIENT_ID',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'char',
+                'description': 'MS Defender APP ID / CLIENT ID',
+            },
+            {
+                'key': 'CLIENT_SECRET',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': 'Password associated to the APP ID',
+            },
+            {
+                'key': 'SYNC_RULES',
+                'value': 'False',
+                'fieldtype': 'bool',
+                'description': 'If set to True, DeepHunter will automatically synchronize your threat hunting analytics (create, modify or delete) with corresponding rules in MS Defender XDR. Possible values: True|False',
+            },
+            {
+                'key': 'QUERY_ERROR_INFO',
+                'value': '',
+                'fieldtype': 'char',
+                'description': 'Regular expression to filter what should be considered INFO instead of ERROR in query error message',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, TENANT_ID, CLIENT_ID, CLIENT_SECRET, SYNC_RULES, QUERY_ERROR_INFO, \

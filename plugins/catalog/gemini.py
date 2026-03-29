@@ -17,6 +17,57 @@ from django.conf import settings
 from connectors.utils import get_connector_conf
 import re
 
+
+def get_connector_metadata():
+    return {
+        'description': (
+            "google-genai (https://github.com/googleapis/python-genai) is an initial "
+            "Python client library for interacting with Google's Generative AI APIs.\n\n"
+            "Google Gen AI Python SDK provides an interface for developers to integrate "
+            "Google's generative models into their Python applications. It supports the "
+            "Gemini Developer API and Vertex AI APIs."
+        ),
+        'domain': 'ai',
+        'connector_conf': [
+            {
+                'key': 'API_KEY',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': 'Get an API key: https://aistudio.google.com/app/apikey',
+            },
+            {
+                'key': 'MODEL',
+                'value': 'gemini-2.0-flash',
+                'fieldtype': 'char',
+                'description': '"gemini-1.5-flash" (~128K tokens, good for basic tasks) or "gemini-2.5-flash" (1M+ tokens, Higher quality, better reasoning)',
+            },
+            {
+                'key': 'TEMPERATURE',
+                'value': '0.0',
+                'fieldtype': 'float',
+                'description': 'Controls randomness / creativity of the model.\n0.0 = deterministic \u2192 same input always gives same output.\nHigher values (e.g. 0.7) allow more variety or creative phrasing.\nBest for: consistent, factual, extractive outputs.',
+            },
+            {
+                'key': 'TOP_P',
+                'value': '1.0',
+                'fieldtype': 'float',
+                'description': 'Also known as nucleus sampling.\nThe model picks from the smallest set of words whose total probability adds up to top_p.\n1.0 means use the entire probability distribution (no filtering).\nLower values (e.g. 0.8) force more focused outputs but can reduce variety.',
+            },
+            {
+                'key': 'TOP_K',
+                'value': '0',
+                'fieldtype': 'int',
+                'description': 'Limits the model to selecting from the top K most likely next tokens.\n0 means no limit \u2014 let top_p fully control the sampling.\nIf set to e.g. top_k=40, the model only chooses from the top 40 likely options.\nBest left at 0 when using top_p=1.0.',
+            },
+            {
+                'key': 'MAX_OUTPUT_TOKENS',
+                'value': '128',
+                'fieldtype': 'int',
+                'description': 'Caps the length of the model\'s response (number of tokens).\n128 tokens \u2248 ~90\u2013100 words (depending on the language and structure).\nSet higher if you expect longer responses.',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, API_KEY, TEMPERATURE, TOP_P, TOP_K, MAX_OUTPUT_TOKENS, MODEL

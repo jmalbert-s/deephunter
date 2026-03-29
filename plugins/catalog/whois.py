@@ -8,6 +8,14 @@ from django.conf import settings
 from bs4 import BeautifulSoup
 
 
+def get_connector_metadata():
+    return {
+        'description': 'WHOIS information from the https://www.whois.com website',
+        'domain': 'extensions',
+        'connector_conf': [],
+    }
+
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY

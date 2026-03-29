@@ -18,6 +18,40 @@ from django.conf import settings
 from connectors.utils import get_connector_conf
 import re
 
+
+def get_connector_metadata():
+    return {
+        'description': (
+            "This plugin integrates any OpenAI-compatible server "
+            "(e.g. Ollama, vLLM, LM Studio, llama.cpp, LocalAI) to suggest "
+            "MITRE techniques based on a given query.\n\n"
+            "Unlike the standard OpenAI plugin, this one lets you configure a "
+            "custom BASE_URL so requests are sent to your own server instead "
+            "of the OpenAI cloud."
+        ),
+        'domain': 'ai',
+        'connector_conf': [
+            {
+                'key': 'BASE_URL',
+                'value': 'http://localhost:11434/v1',
+                'fieldtype': 'url',
+                'description': 'Base URL of your OpenAI-compatible server (e.g. "http://localhost:11434/v1" for Ollama, "http://localhost:8000/v1" for vLLM).',
+            },
+            {
+                'key': 'API_KEY',
+                'value': 'not-needed',
+                'fieldtype': 'password',
+                'description': 'API key for the custom server. Use "not-needed" if the server does not require authentication.',
+            },
+            {
+                'key': 'MODEL',
+                'value': 'llama3',
+                'fieldtype': 'char',
+                'description': 'Model name served by your custom server (e.g. "llama3", "mistral", "codellama").',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, API_KEY, MODEL, BASE_URL

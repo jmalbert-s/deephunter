@@ -16,6 +16,34 @@ from django.conf import settings
 from connectors.utils import get_connector_conf
 import re
 
+
+def get_connector_metadata():
+    return {
+        'description': (
+            "ChatGPT is a generative artificial intelligence chatbot developed by OpenAI "
+            "and released in 2022. It currently uses GPT-5, a generative pre-trained "
+            "transformer (GPT), to generate text, speech, and images in response to user "
+            "prompts.\n\n"
+            "This plugin integrates OpenAI's ChatGPT to suggest MITRE techniques based "
+            "on a given query."
+        ),
+        'domain': 'ai',
+        'connector_conf': [
+            {
+                'key': 'API_KEY',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': 'Get an API key: https://platform.openai.com/account/api-keys',
+            },
+            {
+                'key': 'MODEL',
+                'value': 'gpt-5',
+                'fieldtype': 'char',
+                'description': '"gpt-5 by default.',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, API_KEY, MODEL

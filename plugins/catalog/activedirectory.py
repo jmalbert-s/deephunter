@@ -11,6 +11,81 @@ from ldap3 import Server, Connection, ALL
 from ldap3.core.exceptions import LDAPBindError, LDAPException
 from notifications.utils import add_error_notification
 
+
+def get_connector_metadata():
+    return {
+        'description': 'The Active Directory connector is used in the timeline view to get additional information about the owner of an endpoint.',
+        'domain': 'extensions',
+        'connector_conf': [
+            {
+                'key': 'LDAP_SERVER',
+                'value': 'gc.company.com',
+                'fieldtype': 'char',
+                'description': 'Address of your LDAP server (e.g. "ldap.domain.com")',
+            },
+            {
+                'key': 'LDAP_PORT',
+                'value': '636',
+                'fieldtype': 'int',
+                'description': 'LDAP port number',
+            },
+            {
+                'key': 'LDAP_SSL',
+                'value': 'True',
+                'fieldtype': 'bool',
+                'description': 'Should the LDAP connection be forced via SSL? Possible values: "True" or "False"',
+            },
+            {
+                'key': 'LDAP_USER',
+                'value': 'user@ad.company.com',
+                'fieldtype': 'char',
+                'description': 'Username used to query your LDAP.',
+            },
+            {
+                'key': 'LDAP_PWD',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': 'Password associated to the user mentionned in LDAP_USER.',
+            },
+            {
+                'key': 'LDAP_SEARCH_BASE',
+                'value': 'DC=ad,DC=company,DC=com',
+                'fieldtype': 'char',
+                'description': 'The search base DN. This specifies the base of the subtree in which the search is to be constrained. Example: CN=Users,DC=domain,DC=com.',
+            },
+            {
+                'key': 'LDAP_ATTRIBUTES_USER_NAME',
+                'value': 'displayName',
+                'fieldtype': 'char',
+                'description': 'Corresponding value of your Active Directory attribute for the User Name.',
+            },
+            {
+                'key': 'LDAP_ATTRIBUTES_JOB_TITLE',
+                'value': 'title',
+                'fieldtype': 'char',
+                'description': 'Corresponding value of your Active Directory attribute for the Job Title.',
+            },
+            {
+                'key': 'LDAP_ATTRIBUTES_BUSINESS_UNIT',
+                'value': 'division',
+                'fieldtype': 'char',
+                'description': 'Corresponding value of your Active Directory attribute for the Business Unit.',
+            },
+            {
+                'key': 'LDAP_ATTRIBUTES_OFFICE',
+                'value': 'physicalDeliveryOfficeName',
+                'fieldtype': 'char',
+                'description': 'Corresponding value of your Active Directory attribute for the Office.',
+            },
+            {
+                'key': 'LDAP_ATTRIBUTES_COUNTRY',
+                'value': 'co',
+                'fieldtype': 'char',
+                'description': 'Corresponding value of your Active Directory attribute for the Country.',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, LDAP_SERVER, LDAP_PORT, LDAP_SSL, LDAP_USER, LDAP_PWD, LDAP_SEARCH_BASE, LDAP_ATTRIBUTES

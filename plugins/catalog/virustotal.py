@@ -8,6 +8,21 @@ from django.conf import settings
 import vt
 from notifications.utils import add_error_notification
 
+
+def get_connector_metadata():
+    return {
+        'description': 'Used to consolidate IP reputation in the netview module, and used by the VT hash checker and VT IP checker tools.',
+        'domain': 'extensions',
+        'connector_conf': [
+            {
+                'key': 'API_KEY',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': 'VirusTotal API key',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, API_KEY

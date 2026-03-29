@@ -7,6 +7,14 @@ import requests
 from django.conf import settings
 from bs4 import BeautifulSoup
 
+
+def get_connector_metadata():
+    return {
+        'description': 'Living Off The Land Drivers is a curated list of Windows drivers used by adversaries to bypass security controls and carry out attacks. The project helps security professionals stay informed and mitigate potential threats.',
+        'domain': 'extensions',
+        'connector_conf': [],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY

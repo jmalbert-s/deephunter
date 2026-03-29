@@ -10,6 +10,14 @@ from pathlib import Path
 from notifications.utils import add_error_notification
 from requests.auth import HTTPBasicAuth
 
+
+def get_connector_metadata():
+    return {
+        'description': 'Bitbucket repo sync',
+        'domain': 'repos',
+        'connector_conf': [],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, HTTP_TIMEOUT

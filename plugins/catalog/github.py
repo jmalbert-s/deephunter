@@ -9,6 +9,14 @@ from django.conf import settings
 from pathlib import Path
 from notifications.utils import add_error_notification
 
+
+def get_connector_metadata():
+    return {
+        'description': 'Github repo sync',
+        'domain': 'repos',
+        'connector_conf': [],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, HTTP_TIMEOUT

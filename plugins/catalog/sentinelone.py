@@ -12,6 +12,99 @@ from urllib.parse import quote, quote_plus
 from connectors.utils import manage_analytic_error
 from notifications.utils import add_error_notification
 
+
+def get_connector_metadata():
+    return {
+        'description': 'SentinelOne EDR',
+        'domain': 'analytics',
+        'connector_conf': [
+            {
+                'key': 'S1_URL',
+                'value': 'https://companytenant.sentinelone.net',
+                'fieldtype': 'url',
+                'description': 'S1_URL is the SentinelOne URL for your tenant and is used for any API call to SentinelOne.',
+            },
+            {
+                'key': 'S1_TOKEN',
+                'value': 'xxxxxxxxxx',
+                'fieldtype': 'password',
+                'description': 'S1_TOKEN is the token associated to your API.',
+            },
+            {
+                'key': 'XDR_URL',
+                'value': 'https://xdr.eu1.sentinelone.net',
+                'fieldtype': 'url',
+                'description': 'URL address to use to point to SentinelOne frontend from the timeline view. For the legacy UI, you can use "https://xdr.eu1.sentinelone.net". For the new UI, use the same URL as for the "S1_URL" parameter.',
+            },
+            {
+                'key': 'XDR_PARAMS',
+                'value': 'view=edr',
+                'fieldtype': 'char',
+                'description': 'Parameters associated to the URL address used to point to SentinelOne frontend from the timeline view. For the legacy UI, you can use "view=edr" parameters. For the new UI, use "_categoryId=eventSearch".',
+            },
+            {
+                'key': 'S1_THREATS_URL',
+                'value': 'https://companytenant.sentinelone.net/incidents/unified-alerts?_categoryId=threatsAndAlerts&_scopeLevel=global&alertsTable.filters=assetName__FULLTEXT%3D{}&alertsTable.timeRange=LAST_3_MONTHS',
+                'fieldtype': 'url',
+                'description': 'URL address used to point to the threats page in SentinelOne. The {} placeholder is dynamically replaced with the hostname.',
+            },
+            {
+                'key': 'SYNC_STAR_RULES',
+                'value': 'True',
+                'fieldtype': 'bool',
+                'description': 'If set to True, DeepHunter will automatically synchronize your threat hunting analytics (create, modify or delete) with corresponding STAR rules in SentinelOne. Possible values: True|False',
+            },
+            {
+                'key': 'STAR_RULES_PREFIX',
+                'value': 'TH_',
+                'fieldtype': 'char',
+                'description': 'STAR rules created from DeepHunter to SentinelOne can have a prefix in their name (e.g. "TH_") for an easier identification.',
+            },
+            {
+                'key': 'STAR_RULES_DEFAULT_SEVERITY',
+                'value': 'High',
+                'fieldtype': 'char',
+                'description': 'The rule severity in your environment. Possible values: Low|Medium|High|Critical',
+            },
+            {
+                'key': 'STAR_RULES_DEFAULT_STATUS',
+                'value': 'Active',
+                'fieldtype': 'char',
+                'description': 'Defines the rule is Enabled (Activated and sends alerts if triggered) or Disabled. Possible values: Active|Draft',
+            },
+            {
+                'key': 'STAR_RULES_DEFAULT_EXPIRATION',
+                'value': '',
+                'fieldtype': 'int',
+                'description': 'If the rule is Temporary, enter the expiration delay (in days) for the rule. If set, it will automatically consider expirationMode is "Temporary". Empty string to ignore',
+            },
+            {
+                'key': 'STAR_RULES_DEFAULT_COOLOFFPERIOD',
+                'value': '',
+                'fieldtype': 'int',
+                'description': 'Receive only one alert and suppress additional alerts when a rule is triggered multiple times during the cool-off period. Leave empty to ignore.',
+            },
+            {
+                'key': 'STAR_RULES_DEFAULT_TREATASTHREAT',
+                'value': 'False',
+                'fieldtype': 'bool',
+                'description': 'Defines the Treat as a threat auto response. Possible values: Undefined(or empty)|Suspicious|Malicious',
+            },
+            {
+                'key': 'STAR_RULES_DEFAULT_NETWORKQUARANTINE',
+                'value': 'False',
+                'fieldtype': 'bool',
+                'description': 'Set to True to automatically quarantine the alerted endpoints. Possible values: true|false',
+            },
+            {
+                'key': 'QUERY_ERROR_INFO',
+                'value': "status['\"]:\\s?['\"]FINISHED['\"]",
+                'fieldtype': 'char',
+                'description': 'Regular expression to filter what should be considered INFO instead of ERROR in query error message',
+            },
+        ],
+    }
+
 _globals_initialized = False
 def init_globals():
     global DEBUG, PROXY, DB_DATA_RETENTION, CAMPAIGN_MAX_HOSTS_THRESHOLD, \

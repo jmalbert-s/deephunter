@@ -3,20 +3,51 @@ Write your own plugin
 
 This section provides a guide on how to write your own plugin for DeepHunter.
 
-Requirements
-************
+Files to provide
+****************
 
-Database
-========
+A plugin consists of two files that share the same base name (the **connector name**).
+The connector name must be lowercase, with no spaces or special characters (underscores
+are allowed, e.g. ``openai_custom``).
 
-Plugins' settings should be stored in the database (Connector and ConnectorConf objects).
+.. list-table::
+   :header-rows: 1
 
-Python file
-===========
+   * - File
+     - Path
+     - Description
+   * - Python module
+     - ``plugins/catalog/<name>.py``
+     - Contains all the plugin logic (methods listed below) and the
+       ``get_connector_metadata()`` function that declares the connector's
+       description, domain, and default configuration keys.
+   * - Logo image
+     - ``static/images/connectors/<name>.png``
+     - A square PNG image displayed in the Catalog card and the Connectors
+       settings page. Recommended size: **128 x 128 px**, transparent
+       background.
 
-- The python file should be stored in the `plugins` folder and have the same name (extension excluded) as the plugin name in the database (Connector table).
-- The plugin name shoud not contain any space or special characters. Only use lowercase letters.
-- It should contain all mandatory methods.
+For example, to create a connector named ``acmecorp``, you would provide:
+
+::
+
+  plugins/catalog/acmecorp.py
+  static/images/connectors/acmecorp.png
+
+Database auto-registration
+==========================
+
+Plugins' settings are stored in the database (Connector and ConnectorConf objects).
+When a user opens the **Catalog** page, DeepHunter automatically synchronizes every
+``.py`` file found in ``plugins/catalog/`` with the database: missing Connector rows
+and ConnectorConf entries are created from the plugin's ``get_connector_metadata()``
+function. This means you do **not** need to manually load fixtures or run upgrade
+scripts to register a new plugin.
+
+Methods
+*******
+
+The Python module should contain all mandatory methods.
 
 Methods are listed below (M/O = Mandatory / Optional).
 
@@ -28,6 +59,11 @@ Methods are listed below (M/O = Mandatory / Optional).
      - M/O
      - inputs
      - outputs
+   * - ``get_connector_metadata``
+     - Return a dict declaring the plugin's description, domain, and default ConnectorConf entries. The Catalog view calls this at page-load to auto-create or update the Connector and ConnectorConf rows in the database. See the template below for the expected return format.
+     - M
+     - 
+     - Dict with keys ``description`` (str), ``domain`` (str: analytics|repos|ai|extensions|authentication), ``connector_conf`` (list of dicts with ``key``, ``value``, ``fieldtype``, ``description``).
    * - ``init_globals``
      - Define global variables and initialize them. This method should be called in the beginning of all other methods. Global variables are defined inside this function to delay their initialization until they are actually needed. This avoids side effects at import time.
      - M
@@ -113,6 +149,25 @@ You can use the following template to create your own plugin:
     from connectors.utils import get_connector_conf, gzip_base64_urlencode, manage_analytic_error
     from datetime import datetime, timedelta, timezone
     from urllib.parse import quote, unquote
+
+
+    def get_connector_metadata():
+        """Declare the plugin's database registration metadata.
+        Called by the Catalog view to auto-create Connector + ConnectorConf rows.
+        """
+        return {
+            'description': 'Short description of what this connector does.',
+            'domain': 'analytics',   # analytics | repos | ai | extensions | authentication
+            'connector_conf': [
+                {
+                    'key': 'TENANT_ID',
+                    'value': 'xxxxxxxxxx',
+                    'fieldtype': 'char',    # char | int | float | bool | password | url | email | ipaddress | regex
+                    'description': 'Your tenant identifier.',
+                },
+                # ... add one entry per configuration key ...
+            ],
+        }
 
     _globals_initialized = False
     def init_globals():
