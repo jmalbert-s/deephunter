@@ -25,9 +25,9 @@ def init_globals():
     if not _globals_initialized:
         DEBUG = False
         PROXY = settings.PROXY
-        BASE_URL = get_connector_conf('openai-custom', 'BASE_URL')
-        API_KEY = get_connector_conf('openai-custom', 'API_KEY') or "not-needed"
-        MODEL = get_connector_conf('openai-custom', 'MODEL')
+        BASE_URL = get_connector_conf('openai_custom', 'BASE_URL')
+        API_KEY = get_connector_conf('openai_custom', 'API_KEY') or "not-needed"
+        MODEL = get_connector_conf('openai_custom', 'MODEL')
         _globals_initialized = True
 
 
